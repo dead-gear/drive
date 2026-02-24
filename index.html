@@ -1466,8 +1466,8 @@ function Drive(){
       </div>
     </div>
 
-    {(showSetup||needsSetup)&&<div className="fade-in" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px"}}>
-      <div className="fade-up" style={{background:"#fff",borderRadius:"24px",padding:"28px",maxWidth:"420px",width:"100%",boxShadow:"0 24px 48px rgba(0,0,0,.12)",maxHeight:"90vh",overflowY:"auto"}}>
+    {(showSetup||needsSetup)&&<div className="fade-in" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:"env(safe-area-inset-top, 24px) 16px env(safe-area-inset-bottom, 24px)"}}>
+      <div className="fade-up" style={{background:"#fff",borderRadius:"24px",padding:"28px",maxWidth:"420px",width:"100%",boxShadow:"0 24px 48px rgba(0,0,0,.12)",margin:"24px auto"}}>
         <h2 style={{fontSize:"22px",fontWeight:800,margin:"0 0 4px",color:"#1A1A1A"}}>{needsSetup?"Let's get started":"Settings"}</h2>
         <p style={{fontSize:"14px",color:"#94A3B8",margin:"0 0 24px"}}>{needsSetup?"Set your test date and centre.":"Adjust your plan."}</p>
         <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"6px"}}>TEST DATE</label>
