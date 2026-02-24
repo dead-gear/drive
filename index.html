@@ -6,7 +6,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="theme-color" content="#FAFAF8"/>
-<title>Drive</title>
+<meta name="description" content="Free RSA driving test prep for Dublin. Practice plans for all 7 test centres — Raheny, Finglas, Tallaght, Churchtown, Dún Laoghaire, Mulhuddart, Killester. Real test routes, EDT hour tracking, and adaptive scheduling."/>
+<meta property="og:title" content="Test Day — RSA Driving Test Prep Dublin"/>
+<meta property="og:description" content="Real Dublin test routes, adaptive practice plans, and EDT hour tracking. Free prep for all 7 Dublin test centres."/>
+<meta property="og:type" content="website"/>
+<title>Test Day — RSA Driving Test Prep · Dublin Routes & Practice Plans</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='2' y='2' width='28' height='28' rx='4' fill='white' stroke='%23E53E3E' stroke-width='2.5'/><text x='14' y='23' text-anchor='middle' fill='%23E53E3E' font-size='20' font-weight='900' font-family='sans-serif'>L</text><circle cx='24' cy='24' r='7' fill='%2322C55E'/><path d='M21 24l2 2 4-4' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -1093,6 +1098,14 @@ const Pill=({level,compact})=>(<span style={{display:"inline-flex",alignItems:"c
 // ─── WAYPOINT ICON ─────────────────────────────────────────────────────
 const WIcon=({type})=>{const m={start:["●","#0EA5E9"],waypoint:["○","#94A3B8"],hazard:["▲","#F59E0B"],manoeuvre:["◆","#8B5CF6"]};const[ch,col]=m[type]||m.waypoint;return(<span style={{color:col,fontSize:"10px",lineHeight:1}}>{ch}</span>);};
 
+// ─── LOGO (L PLATE + CHECK) ──────────────────────────────────────────
+const Logo=({size=28})=>{const s=size;return(<svg width={s} height={s} viewBox="0 0 32 32" fill="none">
+  <rect x="2" y="2" width="28" height="28" rx="4" fill="#fff" stroke="#E53E3E" strokeWidth="2.5"/>
+  <text x="14" y="23" textAnchor="middle" fill="#E53E3E" fontSize="20" fontWeight="900" fontFamily="'Plus Jakarta Sans',sans-serif">L</text>
+  <circle cx="24" cy="24" r="7" fill="#22C55E"/>
+  <path d="M21 24l2 2 4-4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+</svg>);};
+
 // ─── CARD ──────────────────────────────────────────────────────────────
 const Card=({children,style:s,...p})=>(<div style={{background:"#fff",borderRadius:"16px",boxShadow:"0 1px 3px rgba(0,0,0,.04), 0 4px 12px rgba(0,0,0,.03)",padding:"16px",...s}} {...p}>{children}</div>);
 
@@ -1121,10 +1134,19 @@ function Drive(){
   const[showSetup,setShowSetup]=useState(false);
   const[routeFilter,setRouteFilter]=useState(null);
   const[showRunLog,setShowRunLog]=useState(false);
+  const[setupErr,setSetupErr]=useState([]);
+  const dateRef=useRef(null);const centreRef=useRef(null);
   const[toast,setToast]=useState(null);
   const toastTimer=useRef(null);
   const showToast=(msg,undoFn)=>{if(toastTimer.current)clearTimeout(toastTimer.current);setToast({msg,undoFn,leaving:false});toastTimer.current=setTimeout(()=>{setToast(t=>t?{...t,leaving:true}:null);setTimeout(()=>setToast(null),250);},4000);};
 
+  const tryApply=()=>{
+    const errs=[];
+    if(!dateInput)errs.push("date");
+    if(!centre)errs.push("centre");
+    if(errs.length){setSetupErr(errs);const el=errs[0]==="date"?dateRef.current:centreRef.current;if(el)el.scrollIntoView({behavior:"smooth",block:"center"});return;}
+    setSetupErr([]);apply();
+  };
   const apply=()=>{if(dateInput){setTestDate(dateInput);ls("drv-date",dateInput);}if(centre)ls("drv-centre",centre);const hrs=Math.max(0,Number(hoursInput)||0);setHoursDriven(hrs);ls("drv-hours",hrs);setFocusPoints(focusInput);ls("drv-focus",focusInput);setPreset(presetInput);ls("drv-preset",presetInput);setAvailDays(daysInput);ls("drv-days",daysInput);setSchedule(schedInput);ls("drv-sched",schedInput);setShowSetup(false);};
   const toggleDay=(dateStr,currentlyRest)=>{
     const newOv={...dayOverrides};
@@ -1457,23 +1479,32 @@ function Drive(){
     {/* HEADER */}
     <div style={{position:"sticky",top:0,zIndex:50,background:"rgba(250,250,248,.85)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",padding:"14px 20px",borderBottom:"1px solid rgba(0,0,0,.04)"}}>
       <div style={{maxWidth:"600px",margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div onClick={()=>testDate&&setShowSetup(true)} style={{display:"flex",alignItems:"center",gap:"10px",cursor:testDate?"pointer":"default",borderRadius:"12px",padding:"4px 8px",margin:"-4px -8px",transition:"background .15s"}} onMouseEnter={e=>{if(testDate)e.currentTarget.style.background="rgba(0,0,0,.03)"}} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-          <h1 style={{fontSize:"20px",fontWeight:800,color:"#1A1A1A",margin:0}}>Drive</h1>
+        <div onClick={()=>{if(testDate){setSetupErr([]);setShowSetup(true);}}} style={{display:"flex",alignItems:"center",gap:"10px",cursor:testDate?"pointer":"default",borderRadius:"12px",padding:"4px 8px",margin:"-4px -8px",transition:"background .15s"}} onMouseEnter={e=>{if(testDate)e.currentTarget.style.background="rgba(0,0,0,.03)"}} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          <Logo size={28}/>
+          <h1 style={{fontSize:"18px",fontWeight:800,color:"#1A1A1A",margin:0}}>Test Day</h1>
           {centre&&<span style={{fontSize:"11px",fontWeight:600,color:"#94A3B8",background:"#F1F5F9",padding:"3px 10px",borderRadius:"20px"}}>{centre}</span>}
           {testDate&&daysLeft!==null&&<span style={{fontSize:"11px",fontWeight:500,color:"#CBD5E1"}}>· {daysLeft}d</span>}
         </div>
-        <button onClick={()=>setShowSetup(true)} style={{width:"34px",height:"34px",borderRadius:"12px",border:"none",background:"#F1F5F9",color:"#64748B",fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"background .2s"}} onMouseEnter={e=>e.currentTarget.style.background="#E2E8F0"} onMouseLeave={e=>e.currentTarget.style.background="#F1F5F9"}>⚙</button>
+        <button onClick={()=>{setSetupErr([]);setShowSetup(true);}} style={{width:"34px",height:"34px",borderRadius:"12px",border:"none",background:"#F1F5F9",color:"#64748B",fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"background .2s"}} onMouseEnter={e=>e.currentTarget.style.background="#E2E8F0"} onMouseLeave={e=>e.currentTarget.style.background="#F1F5F9"}>⚙</button>
       </div>
     </div>
 
     {(showSetup||needsSetup)&&<div className="fade-in" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",zIndex:100,overflowY:"auto",WebkitOverflowScrolling:"touch",padding:"env(safe-area-inset-top, 24px) 16px env(safe-area-inset-bottom, 24px)"}}>
       <div className="fade-up" style={{background:"#fff",borderRadius:"24px",padding:"28px",maxWidth:"420px",width:"100%",boxShadow:"0 24px 48px rgba(0,0,0,.12)",margin:"24px auto"}}>
-        <h2 style={{fontSize:"22px",fontWeight:800,margin:"0 0 4px",color:"#1A1A1A"}}>{needsSetup?"Let's get started":"Settings"}</h2>
-        <p style={{fontSize:"14px",color:"#94A3B8",margin:"0 0 24px"}}>{needsSetup?"Set your test date and centre.":"Adjust your plan."}</p>
-        <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"6px"}}>TEST DATE</label>
-        <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)}
-          style={{width:"100%",padding:"14px 16px",borderRadius:"12px",background:"#F8FAFC",border:"2px solid #E2E8F0",color:"#1A1A1A",fontSize:"16px",outline:"none",transition:"border .2s",marginBottom:"18px"}}
-          onFocus={e=>e.target.style.borderColor="#0EA5E9"} onBlur={e=>e.target.style.borderColor="#E2E8F0"}/>
+        <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"4px"}}>
+          <Logo size={36}/>
+          <div>
+            <h2 style={{fontSize:"22px",fontWeight:800,margin:0,color:"#1A1A1A"}}>{needsSetup?"Test Day":"Settings"}</h2>
+            <p style={{fontSize:"13px",color:"#94A3B8",margin:0}}>{needsSetup?"Plan your RSA driving test prep.":"Adjust your plan."}</p>
+          </div>
+        </div>
+        <div style={{height:"20px"}}/>
+        <div ref={dateRef}>
+        <label style={{fontSize:"12px",fontWeight:700,color:setupErr.includes("date")?"#EF4444":"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"6px"}}>TEST DATE {setupErr.includes("date")&&<span style={{fontWeight:500,textTransform:"none",letterSpacing:0}}>— required</span>}</label>
+        <input type="date" value={dateInput} onChange={e=>{setDateInput(e.target.value);setSetupErr(prev=>prev.filter(x=>x!=="date"));}}
+          style={{width:"100%",padding:"14px 16px",borderRadius:"12px",background:setupErr.includes("date")?"#FFF5F5":"#F8FAFC",border:`2px solid ${setupErr.includes("date")?"#FCA5A5":"#E2E8F0"}`,color:"#1A1A1A",fontSize:"16px",outline:"none",transition:"border .2s",marginBottom:"18px"}}
+          onFocus={e=>e.target.style.borderColor="#0EA5E9"} onBlur={e=>e.target.style.borderColor=setupErr.includes("date")?"#FCA5A5":"#E2E8F0"}/>
+        </div>
         <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"6px"}}>HOURS DRIVEN SO FAR</label>
         <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"18px"}}>
           <input type="number" min="0" max="200" value={hoursInput} onChange={e=>setHoursInput(e.target.value)}
@@ -1541,18 +1572,25 @@ function Drive(){
             </button>);})}
         </div>
 
-        <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"8px"}}>TEST CENTRE</label>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"8px",marginBottom:"8px"}}>
+        <div ref={centreRef}>
+        <label style={{fontSize:"12px",fontWeight:700,color:setupErr.includes("centre")?"#EF4444":"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"8px"}}>TEST CENTRE {setupErr.includes("centre")&&<span style={{fontWeight:500,textTransform:"none",letterSpacing:0}}>— required</span>}</label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"8px",marginBottom:"8px",borderRadius:"16px",border:setupErr.includes("centre")?"2px solid #FCA5A5":"2px solid transparent",padding:setupErr.includes("centre")?"6px":"0",transition:"all .2s"}}>
           {CENTRES.map(o=>(
-            <button key={o.id} onClick={()=>setCentre(o.name)} style={{padding:"12px 8px",borderRadius:"14px",border:`2px solid ${centre===o.name?"#0EA5E9":"#E2E8F0"}`,background:centre===o.name?"#F0F9FF":"#FAFAFA",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
+            <button key={o.id} onClick={()=>{setCentre(o.name);setSetupErr(prev=>prev.filter(x=>x!=="centre"));}} style={{padding:"12px 8px",borderRadius:"14px",border:`2px solid ${centre===o.name?"#0EA5E9":"#E2E8F0"}`,background:centre===o.name?"#F0F9FF":"#FAFAFA",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
               <div style={{fontSize:"14px",fontWeight:700,color:centre===o.name?"#0EA5E9":"#475569"}}>{o.name}</div>
               <div style={{fontSize:"11px",color:"#94A3B8",marginTop:"2px"}}>{o.passRate}</div>
             </button>))}
         </div>
+        </div>
         <p style={{fontSize:"11px",color:"#CBD5E1",margin:"0 0 20px",lineHeight:1.5}}>Raheny & Killester share test roads. Routes are filtered to your centre.</p>
-        <button onClick={apply} disabled={!dateInput} style={{width:"100%",padding:"16px",borderRadius:"14px",border:"none",fontSize:"16px",fontWeight:700,cursor:dateInput?"pointer":"not-allowed",background:dateInput?"#0EA5E9":"#E2E8F0",color:dateInput?"#fff":"#94A3B8",transition:"all .2s",marginBottom:"8px"}}>
+        <button onClick={tryApply} style={{width:"100%",padding:"16px",borderRadius:"14px",border:"none",fontSize:"16px",fontWeight:700,cursor:"pointer",background:"#0EA5E9",color:"#fff",transition:"all .2s",marginBottom:setupErr.length?"6px":"8px"}}>
           {needsSetup?"Generate Plan":"Save Changes"}
         </button>
+        {setupErr.length>0&&<p style={{fontSize:"12px",color:"#EF4444",textAlign:"center",margin:"0 0 8px",fontWeight:500}}>
+          {setupErr.includes("date")&&setupErr.includes("centre")?"Set your test date and centre to continue"
+          :setupErr.includes("date")?"Set your test date to continue"
+          :"Choose a test centre to continue"}
+        </p>}
         {!needsSetup&&<div style={{display:"flex",gap:"8px"}}>
           <button onClick={()=>setShowSetup(false)} style={{flex:1,padding:"14px",borderRadius:"14px",border:"2px solid #E2E8F0",background:"transparent",color:"#64748B",fontSize:"14px",fontWeight:600,cursor:"pointer"}}>Cancel</button>
           <button onClick={()=>{reset();setShowSetup(false);}} style={{flex:1,padding:"14px",borderRadius:"14px",border:"2px solid #FEE2E2",background:"#FFF5F5",color:"#EF4444",fontSize:"14px",fontWeight:600,cursor:"pointer"}}>Reset</button>
@@ -1563,7 +1601,7 @@ function Drive(){
     {/* CONTENT */}
     <div style={{maxWidth:"600px",margin:"0 auto",padding:"12px 16px 100px"}}>
       {view==="plan"&&testDate&&<PlanView/>}
-      {view==="plan"&&!testDate&&<div style={{textAlign:"center",padding:"80px 20px"}}><div style={{fontSize:"40px",marginBottom:"12px"}}>🚗</div><h2 style={{fontSize:"18px",fontWeight:700,color:"#475569",marginBottom:"4px"}}>Ready to start?</h2><p style={{fontSize:"14px",color:"#94A3B8"}}>Set your test date to generate your plan.</p></div>}
+      {view==="plan"&&!testDate&&<div style={{textAlign:"center",padding:"80px 20px"}}><Logo size={56}/><h2 style={{fontSize:"20px",fontWeight:800,color:"#1A1A1A",margin:"16px 0 6px"}}>RSA driving test prep</h2><p style={{fontSize:"14px",color:"#94A3B8",lineHeight:1.5,maxWidth:"280px",margin:"0 auto"}}>Real Dublin test routes, smart practice plans, and EDT hour tracking — all in one place.</p></div>}
       {view==="routes"&&<RoutesView/>}
       {view==="ref"&&<RefView/>}
     </div>
