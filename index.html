@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#000000"/>
+<title>Drive</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:#000;color:#ccc;font-family:'Instrument Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+input[type="date"]{-webkit-appearance:none;appearance:none}
+::-webkit-scrollbar{width:0;display:none}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useMemo}=React;
+
+const RAHENY="RSA+Raheny+Driving+Test+Centre,+All+Saints+Park,+Raheny,+Dublin+5";
+const KILLESTER="RSA+Killester+Driving+Test+Centre,+St+Brigids+Parish+Resource+Centre,+306+Howth+Rd,+Dublin+5";
+
+const ROUTES=[
+  {id:"r1",name:"Clontarf Coastal Loop",centre:"Raheny",difficulty:3,duration:35,distance:"12.9km",
+    description:"Watermill Rd → Clontarf coast → Mount Prospect → Baymount Park → Conquer Hill → Chelsea Gardens → Vernon Ave → return",
+    focus:["hill start","lane changes","narrow roads","reverse","turnabout"],
+    origin:RAHENY,dest:RAHENY,
+    addressWaypoints:["Watermill+Road,+Raheny,+Dublin","Clontarf+Road+near+Bull+Wall,+Clontarf,+Dublin+3","Mount+Prospect+Avenue,+Clontarf,+Dublin+3","Baymount+Park,+Clontarf,+Dublin","Conquer+Hill+Road,+Clontarf,+Dublin","Chelsea+Gardens,+Clontarf,+Dublin","Vernon+Avenue,+Clontarf,+Dublin"],
+    waypoints:[{name:"Raheny Test Centre",lat:53.3764,lng:-6.1784,type:"start"},{name:"Watermill Road",lat:53.3772,lng:-6.1711,type:"waypoint"},{name:"Clontarf Road (Coast)",lat:53.3603,lng:-6.2000,type:"hazard",note:"Narrow — one vehicle width. Gear control critical."},{name:"Mount Prospect Ave",lat:53.3669,lng:-6.1942,type:"manoeuvre",note:"HILL START. Handbrake fully up."},{name:"Baymount Park",lat:53.3678,lng:-6.1742,type:"manoeuvre",note:"REVERSE into Baymount Park."},{name:"Conquer Hill Rd",lat:53.3596,lng:-6.1897,type:"hazard",note:"Staggered junction."},{name:"Chelsea Gardens",lat:53.3626,lng:-6.1898,type:"manoeuvre",note:"TURNABOUT. Very narrow — may need 5 turns."},{name:"Vernon Avenue",lat:53.3644,lng:-6.1953,type:"waypoint"}],
+    hazards:["Clontarf Road narrows to one vehicle width","Lane changes after hatch markings","Steep Mount Prospect hill start","Chelsea Gardens turnabout extremely narrow"],
+    tips:["Check right mirror past hatched markings","1st gear for right at mini roundabouts","Park tight to kerb before turnabout"]},
+  {id:"r2",name:"Raheny Village Circuit",centre:"Raheny",difficulty:2,duration:23,distance:"7.7km",
+    description:"Raheny Village → Harmonstown Rd → Springdale Rd → Ennafort → return",
+    focus:["mini roundabouts","speed ramps","observation","residential"],
+    origin:RAHENY,dest:RAHENY,
+    addressWaypoints:["Main+Street,+Raheny,+Dublin+5","Harmonstown+Road,+Raheny,+Dublin+5","Springdale+Road,+Raheny,+Dublin+5","Ennafort+Park,+Raheny,+Dublin+5"],
+    waypoints:[{name:"Raheny Test Centre",lat:53.3764,lng:-6.1784,type:"start"},{name:"Main St Raheny",lat:53.3808,lng:-6.1800,type:"hazard",note:"Busy junction. Pedestrians."},{name:"Harmonstown Road",lat:53.3830,lng:-6.1750,type:"waypoint"},{name:"Springdale Road",lat:53.3840,lng:-6.1700,type:"hazard",note:"Speed ramps — 2nd gear."},{name:"Ennafort",lat:53.3835,lng:-6.1680,type:"manoeuvre",note:"TURNABOUT and REVERSE location."}],
+    hazards:["Multiple narrow mini roundabouts","Speed ramps in estates","School zones 8:30 & 15:00","Parked cars narrow road"],
+    tips:["MSPSL at every junction","Yield to right at roundabouts","1m clearance from parked cars"]},
+  {id:"r3",name:"Artane Roundabout Run",centre:"Raheny",difficulty:4,duration:30,distance:"8.1km",
+    description:"Howth Rd → Artane Castle roundabout → Kilmore Rd → return. #1 fail location.",
+    focus:["roundabout lanes","traffic light progress","right turns"],
+    origin:RAHENY,dest:RAHENY,
+    addressWaypoints:["Howth+Road,+Raheny,+Dublin+5","Artane+Castle+Shopping+Centre,+Artane,+Dublin+5","Kilmore+Road,+Artane,+Dublin+5"],
+    waypoints:[{name:"Raheny Test Centre",lat:53.3764,lng:-6.1784,type:"start"},{name:"Howth Road",lat:53.3802,lng:-6.1763,type:"hazard",note:"Busy main road."},{name:"Artane Roundabout",lat:53.3837,lng:-6.2149,type:"hazard",note:"#1 FAIL. Lane position critical. Read markings."},{name:"Kilmore Road",lat:53.3861,lng:-6.2162,type:"waypoint"}],
+    hazards:["Artane lights right turn — top fail reason","Artane roundabout lane position","Offside-to-offside confusion","Progress at lights"],
+    tips:["Full green = proceed to middle, wait, turn","Follow road markings at roundabout","Let other driver commit first at offset junctions"]},
+  {id:"r4",name:"Killester Residential",centre:"Killester",difficulty:1,duration:16,distance:"5.3km",
+    description:"Quiet residential → Howth Rd → Cill Eanna → return. Confidence builder.",
+    focus:["smooth starts","basic junctions","observation","GOSHO"],
+    origin:KILLESTER,dest:KILLESTER,
+    addressWaypoints:["Killester+Avenue,+Dublin+5","Howth+Road,+Killester,+Dublin+5","Cill+Eanna,+Raheny,+Dublin+5"],
+    waypoints:[{name:"Killester Test Centre",lat:53.3759,lng:-6.1968,type:"start"},{name:"Killester Avenue",lat:53.3752,lng:-6.2094,type:"waypoint"},{name:"Howth Road",lat:53.3802,lng:-6.1763,type:"hazard",note:"Main road — match traffic speed."},{name:"Cill Eanna",lat:53.3796,lng:-6.1826,type:"manoeuvre",note:"REVERSE around corner."}],
+    hazards:["Speed ramps","Parked cars single-lane","Cycle lanes","Pedestrian crossings"],
+    tips:["GOSHO every stop","Great for building confidence","Smooth starts and stops — no jerking"]},
+  {id:"r5",name:"Dollymount & Bull Island",centre:"Raheny",difficulty:3,duration:30,distance:"10.1km",
+    description:"Watermill Rd → Clontarf coast (Dollymount stretch) → St Assam's → return",
+    focus:["lane changes","narrow roads","reverse","observation"],
+    origin:RAHENY,dest:RAHENY,
+    addressWaypoints:["Watermill+Road,+Raheny,+Dublin","Clontarf+Road,+Dollymount,+Dublin+3","St+Assams+Road,+Raheny,+Dublin+5"],
+    waypoints:[{name:"Raheny Test Centre",lat:53.3764,lng:-6.1784,type:"start"},{name:"Watermill Road",lat:53.3772,lng:-6.1711,type:"waypoint"},{name:"Clontarf Road (Dollymount)",lat:53.3603,lng:-6.2000,type:"hazard",note:"Lane changes. Right mirror. Hatch markings."},{name:"St. Assam's Ave",lat:53.3809,lng:-6.1710,type:"manoeuvre",note:"REVERSE around corner."}],
+    hazards:["Narrow approaches","Lane changes on Clontarf Rd","Hatch markings","Wind near coast"],
+    tips:["Signal early for lane changes","Drop speed/gear early for narrowing","Firm grip in wind"]},
+  {id:"r6",name:"Harmonstown Deep",centre:"Killester",difficulty:2,duration:24,distance:"7.3km",
+    description:"Harmonstown → Avondale Park → Brookwood Ave → return",
+    focus:["turnabout","hill start","residential","give-way"],
+    origin:KILLESTER,dest:KILLESTER,
+    addressWaypoints:["Harmonstown+Road,+Raheny,+Dublin+5","Avondale+Park,+Raheny,+Dublin+5","Brookwood+Avenue,+Artane,+Dublin+5"],
+    waypoints:[{name:"Killester Test Centre",lat:53.3759,lng:-6.1968,type:"start"},{name:"Harmonstown Road",lat:53.3810,lng:-6.1880,type:"waypoint"},{name:"Avondale Park",lat:53.3825,lng:-6.1850,type:"manoeuvre",note:"TURNABOUT in cul-de-sac."},{name:"Brookwood Ave",lat:53.3840,lng:-6.1900,type:"manoeuvre",note:"HILL START. Moderate slope."}],
+    hazards:["Tight cul-de-sacs","Children in estates","Uneven surfaces","Multiple give-ways"],
+    tips:["Check all around before reversing","Bite point → handbrake → mirror → go","30-40km/h in residential"]},
+  {id:"r7",name:"Edenmore & Artane Extension",centre:"Raheny",difficulty:4,duration:33,distance:"10.4km",
+    description:"Edenmore → Artane Castle → Malahide Rd → return",
+    focus:["roundabouts","gap selection","lane discipline","hill start"],
+    origin:RAHENY,dest:RAHENY,
+    addressWaypoints:["Edenmore+Drive,+Raheny,+Dublin+5","Artane+Castle+Shopping+Centre,+Artane,+Dublin+5","Malahide+Road,+Artane,+Dublin+5"],
+    waypoints:[{name:"Raheny Test Centre",lat:53.3764,lng:-6.1784,type:"start"},{name:"Edenmore",lat:53.3830,lng:-6.1780,type:"waypoint"},{name:"Artane Castle",lat:53.3837,lng:-6.2149,type:"hazard",note:"Mini roundabouts in succession."},{name:"Malahide Road",lat:53.3870,lng:-6.2050,type:"hazard",note:"Fast traffic. Gap selection critical."}],
+    hazards:["Multiple mini roundabouts","Malahide Rd fast traffic","Lane discipline in Artane","Bus lanes"],
+    tips:["Scan markings 50m ahead","Don't force gaps on Malahide Rd","Bus lanes: 7-10am & 4-7pm Mon-Sat"]},
+  {id:"r8",name:"Raheny Hill Challenge",centre:"Raheny",difficulty:5,duration:42,distance:"13.4km",
+    description:"Full gauntlet — every manoeuvre, every terrain, all hazards. Test simulation.",
+    focus:["everything","endurance","test simulation"],
+    origin:RAHENY,dest:RAHENY,
+    addressWaypoints:["Raheny+Road,+Raheny,+Dublin+5","Artane+Castle+Shopping+Centre,+Artane,+Dublin+5","Clontarf+Road,+Dollymount,+Dublin+3","Ennafort+Park,+Raheny,+Dublin+5","Cill+Eanna,+Raheny,+Dublin+5"],
+    waypoints:[{name:"Raheny Test Centre",lat:53.3764,lng:-6.1784,type:"start"},{name:"Raheny Hill",lat:53.3790,lng:-6.1780,type:"manoeuvre",note:"STEEP HILL START."},{name:"Artane Roundabout",lat:53.3837,lng:-6.2149,type:"hazard",note:"Lane position."},{name:"Clontarf Coast",lat:53.3603,lng:-6.2000,type:"hazard",note:"Narrow + lane changes."},{name:"Ennafort",lat:53.3835,lng:-6.1680,type:"manoeuvre",note:"TURNABOUT."},{name:"Cill Eanna",lat:53.3796,lng:-6.1826,type:"manoeuvre",note:"REVERSE."}],
+    hazards:["Everything combined","40-minute fatigue","Tester may deviate"],
+    tips:["Only after all others done twice","Practice at expected test time","Handle this → test feels easier"]},
+];
+
+const DL={1:"Starter",2:"Developing",3:"Intermediate",4:"Challenging",5:"Test Ready"};
+const DC={1:"#4ade80",2:"#86efac",3:"#fbbf24",4:"#f97316",5:"#ef4444"};
+const DAY_Q={0:5,1:2,2:5,3:5,4:4,5:1,6:5};
+const SLOTS=[{label:"9:15–11:30am",stars:5},{label:"6–8pm",stars:3}];
+const TARGET_HOURS=45;
+
+function buildMapsUrl(route){
+  const wps=route.addressWaypoints.join("|");
+  return `https://www.google.com/maps/dir/?api=1&origin=${route.origin}&destination=${route.dest}&waypoints=${encodeURIComponent(wps)}&travelmode=driving`;
+}
+
+function ls(k,v){if(v===undefined){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null}catch{return null}}else{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}}
+
+function generatePlan(testDate){
+  const today=new Date();today.setHours(0,0,0,0);
+  const target=new Date(testDate);target.setHours(0,0,0,0);
+  const totalDays=Math.max(0,Math.round((target-today)/86400000));
+  if(totalDays<=0)return[];
+  const sorted=[...ROUTES].sort((a,b)=>a.difficulty-b.difficulty);
+  const phases=[
+    {name:"Foundation",pct:.25,maxDiff:2,sessionMin:60},
+    {name:"Building",pct:.25,maxDiff:3,sessionMin:75},
+    {name:"Intensity",pct:.25,maxDiff:4,sessionMin:90},
+    {name:"Final Prep",pct:.25,maxDiff:5,sessionMin:120},
+  ];
+  const plan=[];let di=0,cumHrs=0;
+  for(const ph of phases){
+    const pd=Math.max(2,Math.round(totalDays*ph.pct));
+    const available=sorted.filter(r=>r.difficulty<=ph.maxDiff);
+    const ceiling=sorted.filter(r=>r.difficulty===ph.maxDiff);
+    const pool=[];
+    for(let i=0;i<pd*2;i++){if(i%5<3&&ceiling.length)pool.push(ceiling[i%ceiling.length]);else pool.push(available[i%available.length]);}
+    let pi=0;
+    for(let d=0;d<pd&&di<totalDays;d++){
+      const date=new Date(today);date.setDate(date.getDate()+di);
+      const dow=date.getDay();
+      const isFri=dow===5;
+      const isRest=isFri&&(ph.name==="Foundation"||ph.name==="Building");
+      const slot=dow===0?SLOTS[1]:SLOTS[0];
+      if(isRest){plan.push({date:new Date(date),phase:ph.name,type:"rest",route:null,slot:null,focus:null,dq:DAY_Q[dow],sessDur:0,cumHrs});}
+      else{const route=pool[pi%pool.length];pi++;cumHrs+=ph.sessionMin/60;plan.push({date:new Date(date),phase:ph.name,type:"practice",route,slot,focus:route.focus.slice(0,2),dq:DAY_Q[dow],sessDur:ph.sessionMin,cumHrs:Math.round(cumHrs*10)/10});}
+      di++;
+    }
+  }
+  const hardRoutes=sorted.filter(r=>r.difficulty>=4);
+  while(di<totalDays){const date=new Date(today);date.setDate(date.getDate()+di);const route=hardRoutes[di%hardRoutes.length]||sorted[sorted.length-1];cumHrs+=2;plan.push({date:new Date(date),phase:"Final Prep",type:"practice",route,slot:SLOTS[0],focus:["test sim","full focus"],dq:DAY_Q[date.getDay()],sessDur:120,cumHrs:Math.round(cumHrs*10)/10});di++;}
+  plan.push({date:new Date(target),phase:"Test Day",type:"test",route:null,slot:null,focus:["GOSHO","MSPSL","breathe"],dq:5,sessDur:0,cumHrs});
+  return plan;
+}
+
+const fmt=d=>d.toLocaleDateString("en-IE",{weekday:"short",day:"numeric",month:"short"});
+const isToday=d=>{const t=new Date();t.setHours(0,0,0,0);const c=new Date(d);c.setHours(0,0,0,0);return c.getTime()===t.getTime();};
+const isPast=d=>{const t=new Date();t.setHours(0,0,0,0);const c=new Date(d);c.setHours(0,0,0,0);return c<t;};
+const Stars=({n})=>React.createElement("span",{style:{letterSpacing:"1px",fontSize:"10px"}},Array.from({length:5},(_,i)=>React.createElement("span",{key:i,style:{color:i<n?"#f59e0b":"#1a1a1a"}},"●")));
+const DB=({level,small})=>React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:"3px",padding:small?"1px 5px":"2px 8px",borderRadius:"3px",fontSize:small?"8px":"9px",fontWeight:700,letterSpacing:".4px",textTransform:"uppercase",background:DC[level]+"12",color:DC[level],border:`1px solid ${DC[level]}25`}},React.createElement("span",{style:{width:small?4:5,height:small?4:5,borderRadius:"50%",background:DC[level]}}),DL[level]);
+const WI=({type})=>{const m={start:["◉","#22d3ee"],waypoint:["○","#333"],hazard:["⚠","#f59e0b"],manoeuvre:["◆","#a78bfa"]};const[ch,col]=m[type]||m.waypoint;return React.createElement("span",{style:{color:col,fontSize:"11px"}},ch);};
+
+const MM=({wps,sz=140})=>{
+  if(!wps||wps.length<2)return null;
+  const p=12,h=sz*.6,las=wps.map(w=>w.lat),lns=wps.map(w=>w.lng);
+  const[mla,xla]=[Math.min(...las),Math.max(...las)],[mln,xln]=[Math.min(...lns),Math.max(...lns)];
+  const rla=xla-mla||.005,rln=xln-mln||.005;
+  const pr=(la,ln)=>({x:p+((ln-mln)/rln)*(sz-2*p),y:p+((xla-la)/rla)*(h-2*p)});
+  const pts=wps.map(w=>pr(w.lat,w.lng));
+  const d=pts.map((pt,i)=>`${i?"L":"M"} ${pt.x} ${pt.y}`).join(" ");
+  const tc={start:"#22d3ee",waypoint:"#222",hazard:"#f59e0b",manoeuvre:"#a78bfa"};
+  return (<svg width={sz} height={h} viewBox={`0 0 ${sz} ${h}`} style={{borderRadius:"5px",background:"#080808",border:"1px solid #151515"}}>
+    <path d={d} fill="none" stroke="#22d3ee" strokeWidth="1.5" strokeOpacity=".3" strokeLinecap="round" strokeDasharray="4 3"/>
+    {pts.map((pt,i)=><circle key={i} cx={pt.x} cy={pt.y} r={wps[i].type==="start"?3.5:2} fill={tc[wps[i].type]||"#222"} stroke="#080808" strokeWidth="1"/>)}
+  </svg>);
+};
+
+const PC=p=>({"Foundation":"#4ade80","Building":"#fbbf24","Intensity":"#f97316","Final Prep":"#ef4444","Test Day":"#22d3ee"}[p]||"#333");
+
+function Drive(){
+  const[view,setView]=useState("plan");
+  const[testDate,setTestDate]=useState(()=>ls("drv-date"));
+  const[centre,setCentre]=useState(()=>ls("drv-centre"));
+  const[progress,setProgress]=useState(()=>ls("drv-prog")||{});
+  const[expDay,setExpDay]=useState(null);
+  const[expRoute,setExpRoute]=useState(null);
+  const[dateInput,setDateInput]=useState(()=>ls("drv-date")||"");
+  const[showSetup,setShowSetup]=useState(false);
+
+  const apply=()=>{if(dateInput){setTestDate(dateInput);ls("drv-date",dateInput);}if(centre!==undefined)ls("drv-centre",centre||"");setShowSetup(false);};
+  const logRun=(routeId,mins)=>{const np={...progress,[routeId]:{runs:(progress[routeId]?.runs||0)+1,mins:(progress[routeId]?.mins||0)+(mins||0),last:new Date().toLocaleDateString("en-IE")}};setProgress(np);ls("drv-prog",np);};
+  const reset=()=>{setProgress({});setTestDate(null);setCentre(null);setDateInput("");localStorage.removeItem("drv-date");localStorage.removeItem("drv-centre");localStorage.removeItem("drv-prog");};
+
+  const plan=useMemo(()=>testDate?generatePlan(testDate):[],[testDate]);
+  const daysLeft=useMemo(()=>{if(!testDate)return null;const n=new Date();n.setHours(0,0,0,0);const t=new Date(testDate);t.setHours(0,0,0,0);return Math.max(0,Math.round((t-n)/86400000));},[testDate]);
+  const loggedMins=Object.values(progress).reduce((s,p)=>s+(p.mins||0),0);
+  const loggedHrs=Math.round(loggedMins/6)/10;
+  const totalRuns=Object.values(progress).reduce((s,p)=>s+(p.runs||0),0);
+  const todayEntry=plan.find(p=>isToday(p.date));
+  const curPhase=todayEntry?.phase||(plan.length?plan.find(p=>!isPast(p.date))?.phase:null);
+  const planHrs=plan.length?plan[plan.length-1].cumHrs||0:0;
+  const needsSetup=!testDate;
+
+  const bg0="#000",bg1="#090909",brd="#161616",brd2="#252525",t1="#fafafa",t2="#ccc",t3="#999",t4="#666",t5="#444",cyan="#22d3ee";
+
+  return (
+    <div style={{minHeight:"100vh",background:bg0,color:t2,fontFamily:"'Instrument Sans',-apple-system,sans-serif"}}>
+      {/* HEADER */}
+      <div style={{borderBottom:`1px solid ${brd}`,padding:"11px 16px",position:"sticky",top:0,background:bg0+"ee",backdropFilter:"blur(8px)",zIndex:50}}>
+        <div style={{maxWidth:"700px",margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+            <h1 style={{fontSize:"16px",fontWeight:700,margin:0,color:t1}}><span style={{color:cyan}}>◉</span> Drive</h1>
+            {centre&&<span style={{fontSize:"9px",color:t5,background:bg1,padding:"2px 6px",borderRadius:"3px",border:`1px solid ${brd}`}}>{centre}</span>}
+            {daysLeft!==null&&<span style={{fontSize:"12px",fontWeight:700,color:daysLeft<=7?"#ef4444":daysLeft<=21?"#f59e0b":cyan,fontFamily:"monospace"}}>{daysLeft}d</span>}
+          </div>
+          <div style={{display:"flex",gap:"2px",alignItems:"center"}}>
+            <div style={{display:"flex",background:bg1,borderRadius:"5px",border:`1px solid ${brd}`,padding:"2px"}}>
+              {["plan","routes","ref"].map(t=><button key={t} onClick={()=>setView(t)} style={{padding:"5px 12px",borderRadius:"3px",border:"none",fontSize:"11px",fontWeight:600,cursor:"pointer",background:view===t?brd2:"transparent",color:view===t?t1:t4}}>{t==="ref"?"Ref":t[0].toUpperCase()+t.slice(1)}</button>)}
+            </div>
+            <button onClick={()=>setShowSetup(true)} style={{width:"28px",height:"28px",borderRadius:"5px",border:`1px solid ${brd2}`,background:bg1,color:t4,fontSize:"14px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>⚙</button>
+          </div>
+        </div>
+      </div>
+
+      {/* SETUP */}
+      {(showSetup||needsSetup)&&(
+        <div style={{position:"fixed",inset:0,background:"#000d",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+          <div style={{background:"#0a0a0a",border:`1px solid ${brd2}`,borderRadius:"12px",padding:"22px",maxWidth:"360px",width:"100%"}}>
+            <h2 style={{fontSize:"15px",fontWeight:700,color:t1,margin:"0 0 3px"}}>{needsSetup?"Set Up":"Settings"}</h2>
+            <p style={{fontSize:"11px",color:t4,margin:"0 0 18px"}}>{needsSetup?"Date and centre to generate your plan.":"Adjust."}</p>
+            <label style={{fontSize:"10px",fontWeight:700,color:t4,letterSpacing:".5px",display:"block",marginBottom:"5px"}}>TEST DATE</label>
+            <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)}
+              style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",borderRadius:"8px",background:brd,border:`1px solid ${brd2}`,color:t1,fontSize:"14px",marginBottom:"14px",outline:"none"}}/>
+            <label style={{fontSize:"10px",fontWeight:700,color:t4,letterSpacing:".5px",display:"block",marginBottom:"6px"}}>TEST CENTRE</label>
+            <div style={{display:"flex",gap:"6px",marginBottom:"6px"}}>
+              {[{v:"Killester",s:"~69% pass"},{v:"Raheny",s:"~48% pass"}].map(o=>(
+                <button key={o.v} onClick={()=>setCentre(o.v)} style={{flex:1,padding:"10px 6px",borderRadius:"8px",border:`1px solid ${centre===o.v?cyan+"40":brd2}`,background:centre===o.v?cyan+"0a":brd,cursor:"pointer",textAlign:"center"}}>
+                  <div style={{fontSize:"13px",fontWeight:600,color:centre===o.v?cyan:t3}}>{o.v}</div>
+                  <div style={{fontSize:"9px",color:t5,marginTop:"2px"}}>{o.s}</div>
+                </button>))}
+            </div>
+            <p style={{fontSize:"9px",color:t5,margin:"0 0 16px",lineHeight:1.4}}>Both centres share the same roads. All 8 routes available regardless.</p>
+            <button onClick={apply} disabled={!dateInput} style={{width:"100%",padding:"12px",borderRadius:"8px",border:"none",fontSize:"13px",fontWeight:700,cursor:dateInput?"pointer":"not-allowed",background:dateInput?cyan:brd2,color:dateInput?"#000":t5,marginBottom:"6px"}}>
+              {needsSetup?"Generate Plan":"Apply"}
+            </button>
+            {!needsSetup&&<div style={{display:"flex",gap:"6px"}}>
+              <button onClick={()=>setShowSetup(false)} style={{flex:1,padding:"10px",borderRadius:"8px",border:`1px solid ${brd2}`,background:"transparent",color:t4,fontSize:"11px",cursor:"pointer"}}>Cancel</button>
+              <button onClick={()=>{reset();setShowSetup(false);}} style={{flex:1,padding:"10px",borderRadius:"8px",border:"1px solid #ef444420",background:"#ef444408",color:"#ef4444",fontSize:"11px",cursor:"pointer"}}>Reset</button>
+            </div>}
+          </div>
+        </div>
+      )}
+
+      <div style={{maxWidth:"700px",margin:"0 auto",padding:"10px 16px 60px"}}>
+        {/* STATS */}
+        {testDate&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"5px",marginBottom:"10px"}}>
+            <div style={{padding:"10px",background:bg1,borderRadius:"7px",border:`1px solid ${brd}`}}>
+              <div style={{fontSize:"20px",fontWeight:700,color:daysLeft<=7?"#ef4444":daysLeft<=21?"#f59e0b":cyan,fontFamily:"monospace",lineHeight:1}}>{daysLeft}<span style={{fontSize:"9px",color:t5}}>d</span></div>
+              <div style={{fontSize:"9px",color:t5,marginTop:"1px"}}>until test</div>
+            </div>
+            <div style={{padding:"10px",background:bg1,borderRadius:"7px",border:`1px solid ${brd}`}}>
+              <div style={{fontSize:"20px",fontWeight:700,color:t1,fontFamily:"monospace",lineHeight:1}}>{loggedHrs}<span style={{fontSize:"9px",color:t5}}>/{TARGET_HOURS}h</span></div>
+              <div style={{fontSize:"9px",color:t5,marginTop:"1px"}}>logged</div>
+              <div style={{marginTop:"4px",height:"3px",background:brd,borderRadius:"2px",overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,loggedHrs/TARGET_HOURS*100)}%`,background:cyan,borderRadius:"2px",transition:"width .3s"}}/></div>
+            </div>
+            <div style={{padding:"10px",background:bg1,borderRadius:"7px",border:`1px solid ${brd}`}}>
+              <div style={{fontSize:"13px",fontWeight:700,color:PC(curPhase),lineHeight:1}}>{curPhase||"—"}</div>
+              <div style={{fontSize:"9px",color:t5,marginTop:"2px"}}>{totalRuns} runs</div>
+            </div>
+            <div style={{padding:"10px",background:bg1,borderRadius:"7px",border:`1px solid ${brd}`}}>
+              <div style={{fontSize:"20px",fontWeight:700,color:t1,fontFamily:"monospace",lineHeight:1}}>{Math.round(planHrs)}<span style={{fontSize:"9px",color:t5}}>h</span></div>
+              <div style={{fontSize:"9px",color:t5,marginTop:"1px"}}>plan</div>
+            </div>
+          </div>
+        )}
+
+        {/* PLAN */}
+        {view==="plan"&&testDate&&(<div>
+          <div style={{display:"flex",gap:"10px",marginBottom:"8px",flexWrap:"wrap"}}>
+            {["Foundation","Building","Intensity","Final Prep"].map(p=><span key={p} style={{fontSize:"9px",color:PC(p),display:"flex",alignItems:"center",gap:"3px"}}><span style={{width:5,height:5,borderRadius:"2px",background:PC(p)}}/>{p}</span>)}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:"2px"}}>
+            {plan.map((day,i)=>{
+              const td=isToday(day.date),past=isPast(day.date)&&!td,exp=expDay===i;
+              const isTest=day.type==="test",isRest=day.type==="rest";
+              const pc=PC(day.phase);
+              return(<div key={i}>
+                <div onClick={()=>!isRest&&setExpDay(exp?null:i)}
+                  style={{display:"flex",alignItems:"center",gap:"7px",padding:"8px 10px",borderRadius:"6px",cursor:isRest?"default":"pointer",
+                    background:td?cyan+"06":isTest?cyan+"04":exp?"#0a0a0a":"transparent",
+                    border:`1px solid ${td?cyan+"15":exp?brd2:"transparent"}`,opacity:past?.3:1}}>
+                  <div style={{width:"2px",height:"24px",borderRadius:"1px",background:pc,opacity:.5,flexShrink:0}}/>
+                  <div style={{width:"58px",flexShrink:0}}>
+                    <div style={{fontSize:"10px",fontWeight:td?700:400,color:td?cyan:t3}}>{td?"Today":fmt(day.date)}</div>
+                    {!td&&<Stars n={day.dq}/>}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    {isTest?<span style={{fontSize:"12px",fontWeight:700,color:cyan}}>TEST DAY</span>
+                    :isRest?<span style={{fontSize:"10px",color:t5,fontStyle:"italic"}}>Rest</span>
+                    :<div>
+                      <div style={{display:"flex",alignItems:"center",gap:"5px",flexWrap:"wrap"}}>
+                        <span style={{fontSize:"11px",fontWeight:500,color:t2}}>{day.route.name}</span>
+                        <DB level={day.route.difficulty} small/>
+                      </div>
+                      {day.focus&&<div style={{fontSize:"9px",color:t5,marginTop:"1px"}}>{day.focus.join(" · ")}</div>}
+                    </div>}
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",flexShrink:0,gap:"1px"}}>
+                    {day.sessDur>0&&<span style={{fontSize:"9px",color:t4}}>{day.sessDur}min</span>}
+                    {day.slot&&<span style={{fontSize:"8px",color:t5}}>{day.slot.label}</span>}
+                  </div>
+                  {!isRest&&<span style={{color:t5,fontSize:"10px",transition:"transform .15s",transform:exp?"rotate(90deg)":"none"}}>›</span>}
+                </div>
+
+                {exp&&day.route&&(
+                  <div style={{margin:"0 0 2px 12px",padding:"10px 12px",background:bg1,borderRadius:"0 0 6px 6px",borderLeft:`2px solid ${pc}20`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:"6px"}}>
+                      <span style={{fontSize:"9px",color:t4}}>Cumulative: {day.cumHrs}h / {TARGET_HOURS}h</span>
+                      <span style={{fontSize:"9px",color:t5}}>{day.route.duration}min · {day.route.distance}</span>
+                    </div>
+                    <p style={{fontSize:"10px",color:t3,margin:"0 0 6px",lineHeight:1.4}}>{day.route.description}</p>
+                    {day.route.waypoints.map((wp,j)=>(
+                      <div key={j} style={{display:"flex",gap:"4px",alignItems:"flex-start",marginBottom:"2px"}}>
+                        <WI type={wp.type}/>
+                        <div><span style={{fontSize:"9px",color:t2}}>{wp.name}</span>{wp.note&&<p style={{fontSize:"8px",color:t4,margin:"0",lineHeight:1.3}}>{wp.note}</p>}</div>
+                      </div>))}
+                    <div style={{marginTop:"6px"}}>
+                      <span style={{fontSize:"8px",fontWeight:700,color:"#f59e0b",letterSpacing:".3px"}}>HAZARDS</span>
+                      {day.route.hazards.map((h,j)=><p key={j} style={{fontSize:"9px",color:t3,margin:"1px 0",lineHeight:1.3}}>• {h}</p>)}
+                    </div>
+                    <div style={{display:"flex",gap:"6px",marginTop:"10px",flexWrap:"wrap"}}>
+                      <a href={buildMapsUrl(day.route)} target="_blank" rel="noopener noreferrer"
+                        style={{display:"inline-flex",alignItems:"center",gap:"4px",padding:"8px 14px",borderRadius:"6px",background:cyan,color:"#000",fontSize:"12px",fontWeight:700,textDecoration:"none"}}>
+                        Open in Maps ↗
+                      </a>
+                      <button onClick={()=>logRun(day.route.id,day.sessDur)}
+                        style={{padding:"8px 14px",borderRadius:"6px",fontSize:"12px",fontWeight:600,cursor:"pointer",background:cyan+"0d",border:`1px solid ${cyan}20`,color:cyan}}>
+                        + Log ({day.sessDur}min)
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {exp&&isTest&&(
+                  <div style={{margin:"0 0 2px 12px",padding:"10px",background:bg1,borderRadius:"0 0 6px 6px",borderLeft:`2px solid ${cyan}20`}}>
+                    <p style={{fontSize:"11px",color:t2,margin:"0 0 6px",lineHeight:1.5}}>15 mins early. Phone loud until tester calls, then off. 30-35 mins driving. You've done this.</p>
+                    <div style={{display:"flex",gap:"4px",flexWrap:"wrap"}}>
+                      {["GOSHO every stop","MSPSL every junction","1m from parked cars","Mirror before every move","Progress at lights"].map(t=>(
+                        <span key={t} style={{fontSize:"9px",padding:"3px 6px",borderRadius:"3px",background:cyan+"08",border:`1px solid ${cyan}15`,color:cyan}}>{t}</span>))}
+                    </div>
+                  </div>
+                )}
+              </div>);
+            })}
+          </div>
+        </div>)}
+        {view==="plan"&&!testDate&&<div style={{textAlign:"center",padding:"50px",color:t5,fontSize:"12px"}}>Set your test date to generate a plan</div>}
+
+        {/* ROUTES */}
+        {view==="routes"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+            {ROUTES.map(route=>{
+              const p=progress[route.id];const runs=p?.runs||0;const exp=expRoute===route.id;
+              return(<div key={route.id} style={{border:`1px solid ${brd}`,borderRadius:"7px",background:bg1,overflow:"hidden"}}>
+                <div style={{padding:"10px 12px",cursor:"pointer",display:"flex",gap:"10px",alignItems:"center"}} onClick={()=>setExpRoute(exp?null:route.id)}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"5px",marginBottom:"2px",flexWrap:"wrap"}}>
+                      <DB level={route.difficulty} small/><span style={{fontSize:"9px",color:t5}}>{route.centre} · {route.duration}min · {route.distance}</span>
+                    </div>
+                    <div style={{fontSize:"13px",fontWeight:600,color:t1}}>{route.name}</div>
+                    <p style={{fontSize:"9px",color:t5,margin:"2px 0 0",lineHeight:1.3}}>{route.description}</p>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"2px",flexShrink:0}}>
+                    {runs>0&&<span style={{fontSize:"14px",fontWeight:700,color:cyan,fontFamily:"monospace"}}>{runs}×</span>}
+                    <MM wps={route.waypoints} sz={85}/>
+                  </div>
+                </div>
+                {exp&&(<div style={{borderTop:`1px solid ${brd}`,padding:"10px 12px",background:"#050505"}}>
+                  {route.waypoints.map((wp,j)=><div key={j} style={{display:"flex",gap:"4px",alignItems:"flex-start",marginBottom:"2px"}}><WI type={wp.type}/><div><span style={{fontSize:"10px",color:t2}}>{wp.name}</span>{wp.note&&<p style={{fontSize:"8px",color:t4,margin:"0"}}>{wp.note}</p>}</div></div>)}
+                  <div style={{marginTop:"6px",marginBottom:"6px"}}>
+                    <span style={{fontSize:"8px",fontWeight:700,color:"#f59e0b",letterSpacing:".3px"}}>HAZARDS</span>
+                    {route.hazards.map((h,j)=><p key={j} style={{fontSize:"9px",color:t3,margin:"2px 0",lineHeight:1.3}}>• {h}</p>)}
+                  </div>
+                  <div style={{marginBottom:"8px"}}>
+                    <span style={{fontSize:"8px",fontWeight:700,color:cyan,letterSpacing:".3px"}}>TIPS</span>
+                    {route.tips.map((t,j)=><p key={j} style={{fontSize:"9px",color:t3,margin:"2px 0",lineHeight:1.3}}>→ {t}</p>)}
+                  </div>
+                  <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                    <a href={buildMapsUrl(route)} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:"4px",padding:"8px 14px",borderRadius:"6px",background:cyan,color:"#000",fontSize:"12px",fontWeight:700,textDecoration:"none"}}>Open in Maps ↗</a>
+                    <button onClick={()=>logRun(route.id,route.duration)} style={{padding:"8px 14px",borderRadius:"6px",fontSize:"12px",fontWeight:600,cursor:"pointer",background:cyan+"0d",border:`1px solid ${cyan}20`,color:cyan}}>+ Log Run</button>
+                    {runs>0&&<span style={{fontSize:"9px",color:t5,alignSelf:"center",marginLeft:"auto"}}>{runs} runs · {Math.round((p?.mins||0)/60*10)/10}h</span>}
+                  </div>
+                </div>)}
+              </div>);
+            })}
+          </div>
+        )}
+
+        {/* REF */}
+        {view==="ref"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+            <div style={{padding:"12px",borderRadius:"7px",background:bg1,border:`1px solid ${brd}`}}>
+              <div style={{marginBottom:"10px"}}>
+                <h4 style={{fontSize:"12px",color:t1,margin:"0 0 4px",fontWeight:700}}>GOSHO — When Stopped</h4>
+                <div style={{display:"flex",gap:"3px",flexWrap:"wrap"}}>
+                  {["Gear","Observation","Signal","Handbrake","Observation"].map((s,i)=><span key={i} style={{padding:"3px 7px",borderRadius:"3px",fontSize:"10px",background:cyan+"06",border:`1px solid ${cyan}12`,color:cyan}}><strong>{s[0]}</strong>{s.slice(1)}</span>)}
+                </div>
+              </div>
+              <div>
+                <h4 style={{fontSize:"12px",color:t1,margin:"0 0 4px",fontWeight:700}}>MSPSL — Every Junction</h4>
+                <div style={{display:"flex",gap:"3px",flexWrap:"wrap"}}>
+                  {["Mirror","Signal","Position","Speed","Look"].map((s,i)=><span key={i} style={{padding:"3px 7px",borderRadius:"3px",fontSize:"10px",background:"#a78bfa06",border:"1px solid #a78bfa12",color:"#a78bfa"}}><strong>{s[0]}</strong>{s.slice(1)}</span>)}
+                </div>
+              </div>
+            </div>
+            <div style={{padding:"12px",borderRadius:"7px",background:bg1,border:`1px solid ${brd}`}}>
+              <h3 style={{fontSize:"9px",fontWeight:700,letterSpacing:".8px",color:"#f59e0b",textTransform:"uppercase",margin:"0 0 6px"}}>Common Fails</h3>
+              {[{t:"Progress at Lights",d:"Not entering junction on green for right turn. Go to middle, wait."},{t:"Roundabout Position",d:"Wrong lane at Artane roundabout. Read markings 50m ahead."},{t:"Observation",d:"No mirror before moving out, lane change, or turn."},{t:"Clearance",d:"Too close to parked cars. 1m minimum."},{t:"Mini Roundabouts",d:"1st gear right turns. Yield right. Signal."}].map((f,i)=>(
+                <div key={i} style={{marginBottom:"6px"}}><h4 style={{fontSize:"10px",color:"#f59e0b",margin:"0 0 1px",fontWeight:600}}>{f.t}</h4><p style={{fontSize:"9px",color:t3,margin:0,lineHeight:1.4}}>{f.d}</p></div>))}
+            </div>
+            <div style={{padding:"12px",borderRadius:"7px",background:bg1,border:`1px solid ${brd}`}}>
+              <h3 style={{fontSize:"9px",fontWeight:700,letterSpacing:".8px",color:t4,textTransform:"uppercase",margin:"0 0 6px"}}>Hours Guide</h3>
+              <p style={{fontSize:"10px",color:t3,margin:0,lineHeight:1.5}}>Most Irish learners need <strong style={{color:t1}}>30–45 hours total</strong> (professional + private). RSA mandates 12 EDT sessions minimum. This plan targets <strong style={{color:t1}}>{TARGET_HOURS}h</strong> across {plan.filter(p=>p.type==="practice").length} sessions, building from 60min → 120min.</p>
+            </div>
+            <div style={{padding:"12px",borderRadius:"7px",background:bg1,border:`1px solid ${brd}`}}>
+              <h3 style={{fontSize:"9px",fontWeight:700,letterSpacing:".8px",color:t4,textTransform:"uppercase",margin:"0 0 6px"}}>Manoeuvre Spots</h3>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"6px"}}>
+                {[{t:"Turnabout",s:["Ennafort","Avondale Pk","Chelsea Gdns"]},{t:"Reverse",s:["Cill Eanna","Ennafort","St. Assam's","Baymount Pk"]},{t:"Hill Start",s:["Raheny Hill","Brookwood","Mt Prospect"]}].map((m,i)=>(
+                  <div key={i}><h4 style={{fontSize:"9px",color:"#a78bfa",margin:"0 0 2px"}}>◆ {m.t}</h4>{m.s.map(s=><p key={s} style={{fontSize:"8px",color:t4,margin:"1px 0"}}>{s}</p>)}</div>))}
+              </div>
+            </div>
+            <div style={{padding:"12px",borderRadius:"7px",background:bg1,border:`1px solid ${brd}`}}>
+              <h3 style={{fontSize:"9px",fontWeight:700,letterSpacing:".8px",color:t4,textTransform:"uppercase",margin:"0 0 6px"}}>Centres</h3>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"8px"}}>
+                <div><h4 style={{fontSize:"10px",color:t1,margin:"0 0 1px"}}>Killester</h4><p style={{fontSize:"8px",color:t5,margin:0,lineHeight:1.5}}>St Brigid's, Howth Rd · ~69% pass</p></div>
+                <div><h4 style={{fontSize:"10px",color:t1,margin:"0 0 1px"}}>Raheny</h4><p style={{fontSize:"8px",color:t5,margin:0,lineHeight:1.5}}>4 All Saints Park · ~48% pass</p></div>
+              </div>
+              <p style={{fontSize:"8px",color:t5,margin:"6px 0 0",fontStyle:"italic"}}>2km apart. Same roads. All routes relevant to both.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Drive/>);
+</script>
+</body>
+</html>
