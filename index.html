@@ -19,7 +19,18 @@ input[type="date"]{font-family:'Plus Jakarta Sans',sans-serif}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .fade-up{animation:fadeUp .35s ease-out both}
-.fade-in{animation:fadeIn .3s ease-out both}
+.fade-in{animation:fadeIn .15s ease-out both}
+.pill-scroll{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2px 0}
+.pill-scroll::-webkit-scrollbar{display:none}
+@keyframes toastIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(20px)}}
+.toast-in{animation:toastIn .25s ease-out both}
+.toast-out{animation:toastOut .2s ease-in both}
+input[type="number"]{font-family:'Plus Jakarta Sans',sans-serif}
+input[type="range"]{-webkit-appearance:none;width:100%;height:6px;border-radius:3px;background:#E2E8F0;outline:none}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#0EA5E9;cursor:pointer;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+input[type="range"]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#0EA5E9;cursor:pointer;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+@media(max-width:380px){.setup-grid-centres{grid-template-columns:1fr 1fr !important;gap:6px !important}}
 </style>
 </head>
 <body>
@@ -32,8 +43,50 @@ const {useState,useEffect,useCallback,useMemo,useRef}=React;
 
 const RAHENY="RSA+Raheny+Driving+Test+Centre,+All+Saints+Park,+Raheny,+Dublin+5";
 const KILLESTER="RSA+Killester+Driving+Test+Centre,+St+Brigids+Parish+Resource+Centre,+306+Howth+Rd,+Dublin+5";
+const FINGLAS="RSA+Finglas+Driving+Test+Centre,+Jamestown+Business+Park,+Jamestown+Road,+Finglas,+Dublin+11";
+const TALLAGHT="RSA+Tallaght+Driving+Test+Centre,+Premier+Business+Park,+52+Broomhill+Road,+Tallaght,+Dublin+24";
+const CHURCHTOWN="RSA+Churchtown+Driving+Test+Centre,+5+Braemor+Road,+Churchtown,+Dublin+14";
+const DUN_LAOGHAIRE="RSA+Dun+Laoghaire+Driving+Test+Centre,+Pottery+Road,+Dun+Laoghaire,+Co+Dublin";
+const MULHUDDART="RSA+Mulhuddart+Driving+Test+Centre,+Carlton+Hotel,+Church+Road,+Tyrrelstown,+Dublin+15";
+
+const CENTRES=[
+  {id:"raheny",name:"Raheny",passRate:"~48%"},
+  {id:"killester",name:"Killester",passRate:"~69%"},
+  {id:"finglas",name:"Finglas",passRate:"~41%"},
+  {id:"tallaght",name:"Tallaght",passRate:"~55%"},
+  {id:"churchtown",name:"Churchtown",passRate:"~40%"},
+  {id:"dun_laoghaire",name:"Dún Laoghaire",passRate:"~53%"},
+  {id:"mulhuddart",name:"Mulhuddart",passRate:"~50%"}
+];
+
+const FOCUS_SKILLS=[
+  {id:"roundabouts",label:"Roundabouts",match:["roundabouts","roundabout lanes","mini roundabouts","major roundabout"]},
+  {id:"hill_start",label:"Hill Starts",match:["hill start"]},
+  {id:"reverse",label:"Reverse",match:["reverse","reverse around corner"]},
+  {id:"turnabout",label:"Turnabout",match:["turnabout"]},
+  {id:"right_turns",label:"Right Turns",match:["right turns","right turns at lights"]},
+  {id:"lane_changes",label:"Lane Changes",match:["lane changes","lane discipline","lane merges"]},
+  {id:"traffic_lights",label:"Traffic Lights",match:["traffic lights","traffic-controlled junctions"]},
+  {id:"observation",label:"Observation",match:["observation","GOSHO","gap selection","crossroads"]},
+  {id:"speed_mgmt",label:"Speed Management",match:["speed ramps","speed management","narrow roads"]},
+  {id:"dual_carriageway",label:"Dual Carriageway",match:["dual carriageway","motorway merge"]}
+];
+function routeFocusScore(route,userFocus){
+  if(!userFocus||userFocus.length===0)return 0;
+  const matchSet=new Set();
+  userFocus.forEach(fid=>{const sk=FOCUS_SKILLS.find(s=>s.id===fid);if(sk)sk.match.forEach(m=>matchSet.add(m.toLowerCase()));});
+  return route.focus.reduce((sc,f)=>sc+(matchSet.has(f.toLowerCase())?1:0),0);
+}
+
+const PRESETS={
+  light:{label:"Light",desc:"3 days · 1h each",icon:"🌱",days:[1,3,5],wd:{spd:1,len:60},we:{spd:1,len:60},wkHrs:3},
+  steady:{label:"Steady",desc:"5 weekdays + Sat",icon:"🚗",days:[1,2,3,4,5,6],wd:{spd:1,len:60},we:{spd:2,len:90},wkHrs:8},
+  intensive:{label:"Intensive",desc:"6 days · double sessions",icon:"🔥",days:[1,2,3,4,5,6],wd:{spd:2,len:75},we:{spd:2,len:90},wkHrs:15.5},
+  custom:{label:"Custom",desc:"Set your own schedule",icon:"⚙"}
+};
 
 const ROUTES=[
+
   {id:"r1",name:"Clontarf Coastal Loop",centre:"Raheny",difficulty:3,duration:35,distance:"12.9km",
     description:"Watermill Rd → coast → Mount Prospect → Baymount → Conquer Hill → Chelsea Gardens → Vernon Ave",
     focus:["hill start","lane changes","narrow roads","reverse","turnabout"],
@@ -98,6 +151,774 @@ const ROUTES=[
     waypoints:[{name:"Raheny Centre",lat:53.3764,lng:-6.1784,type:"start"},{name:"Raheny Hill",lat:53.3790,lng:-6.1780,type:"manoeuvre",note:"Steep hill start"},{name:"Artane",lat:53.3837,lng:-6.2149,type:"hazard",note:"Lane position"},{name:"Coast",lat:53.3603,lng:-6.2000,type:"hazard",note:"Narrow + lane changes"},{name:"Ennafort",lat:53.3835,lng:-6.1680,type:"manoeuvre",note:"Turnabout"},{name:"Cill Eanna",lat:53.3796,lng:-6.1826,type:"manoeuvre",note:"Reverse"}],
     hazards:["Everything combined","40-minute fatigue","Tester may deviate"],
     tips:["Only after others done twice","Practice at expected test time","Handle this → test feels easier"]},
+  {
+    id: "f1", name: "Ballygall Residential", centre: "Finglas", difficulty: 2, duration: 11, distance: "4.2km",
+    description: "Jamestown Rd → Clancy Ave → McKee Rd → Finglas Park → Ballygall Ave → Glasnevin Ave → return",
+    focus: ["mini roundabouts", "residential junctions", "reverse", "turnabout"],
+    origin:FINGLAS, dest:FINGLAS,
+    addressWaypoints: [
+    "Clancy+Avenue,+Finglas,+Dublin+11",
+    "McKee+Road,+Finglas,+Dublin+11",
+    "Finglas+Park,+Finglas,+Dublin+11",
+    "Ballygall+Avenue,+Finglas,+Dublin+11",
+    "Glasnevin+Avenue,+Dublin+11"
+    ],
+    waypoints: [
+    { name: "Finglas Centre", lat: 53.3899, lng: -6.2967, type: "start" },
+    { name: "Clancy Avenue", lat: 53.3907, lng: -6.2930, type: "hazard", note: "Very sharp left — use 1st gear" },
+    { name: "McKee Road", lat: 53.3888, lng: -6.2895, type: "waypoint" },
+    { name: "Finglas Park", lat: 53.3870, lng: -6.2870, type: "waypoint" },
+    { name: "Ballygall Avenue", lat: 53.3840, lng: -6.2860, type: "waypoint" },
+    { name: "Glasnevin Avenue", lat: 53.3820, lng: -6.2880, type: "manoeuvre", note: "Reverse into Grove Park Crescent" }
+    ],
+    hazards: ["Sharp left onto Clancy Avenue — very tight angle", "Multiple mini roundabouts in Ballygall", "Speed ramps throughout estates", "Parked cars narrowing roads"],
+    tips: ["1st gear for the Clancy Ave turn — slow right down", "Yield to right at every mini roundabout", "Check mirrors before and after each speed ramp"]
+    },
+  {
+    id: "f2", name: "Cedarwood Estate", centre: "Finglas", difficulty: 2, duration: 24, distance: "7.9km",
+    description: "Jamestown Rd → Sycamore Rd → Cedarwood Rd → reverse & turnabout → return",
+    focus: ["reverse around corner", "turnabout", "residential", "speed ramps"],
+    origin:FINGLAS, dest:FINGLAS,
+    addressWaypoints: [
+    "Sycamore+Road,+Finglas,+Dublin+11",
+    "Cedarwood+Road,+Finglas,+Dublin+11",
+    "Cedarwood+Park,+Finglas,+Dublin+11",
+    "Oakwood+Park,+Finglas,+Dublin+11"
+    ],
+    waypoints: [
+    { name: "Finglas Centre", lat: 53.3899, lng: -6.2967, type: "start" },
+    { name: "Sycamore Road", lat: 53.3912, lng: -6.2945, type: "waypoint" },
+    { name: "Cedarwood Road", lat: 53.3925, lng: -6.2930, type: "manoeuvre", note: "Reverse around 1st corner" },
+    { name: "Cedarwood Park", lat: 53.3935, lng: -6.2920, type: "manoeuvre", note: "Turnabout" },
+    { name: "Oakwood Park", lat: 53.3930, lng: -6.2910, type: "waypoint" }
+    ],
+    hazards: ["Speed ramps", "Narrow estate roads", "Children in estates", "Parked cars on bends"],
+    tips: ["This is a manoeuvre-focused route — nail reverse and turnabout here", "2nd gear over speed ramps at 20km/h", "Check all around before reversing"]
+    },
+  {
+    id: "f3", name: "Willow Park Loop", centre: "Finglas", difficulty: 3, duration: 33, distance: "13.2km",
+    description: "Ballygall Rd → Willow Park → Grove Park → Beneavin Drive → Glasilawn → return",
+    focus: ["roundabouts", "lane discipline", "hill start", "observation"],
+    origin:FINGLAS, dest:FINGLAS,
+    addressWaypoints: [
+    "Ballygall+Road+West,+Finglas,+Dublin+11",
+    "Willow+Park+Road,+Finglas,+Dublin+11",
+    "Grove+Park+Avenue,+Finglas,+Dublin+11",
+    "Beneavin+Drive,+Finglas,+Dublin+11",
+    "Glasilawn+Road,+Finglas,+Dublin+11"
+    ],
+    waypoints: [
+    { name: "Finglas Centre", lat: 53.3899, lng: -6.2967, type: "start" },
+    { name: "Ballygall Road", lat: 53.3825, lng: -6.2870, type: "hazard", note: "Busy main road — check speed limit" },
+    { name: "Willow Park Road", lat: 53.3810, lng: -6.2850, type: "waypoint" },
+    { name: "Grove Park Avenue", lat: 53.3815, lng: -6.2840, type: "manoeuvre", note: "Reverse into Grove Park Crescent" },
+    { name: "Beneavin Drive", lat: 53.3800, lng: -6.2830, type: "waypoint" },
+    { name: "Glasilawn Road", lat: 53.3790, lng: -6.2840, type: "waypoint" }
+    ],
+    hazards: ["Roundabout at Willow Park — lane position critical", "Speed limit changes on main roads", "Staggered junctions in Grove Park", "Bus lanes on Ballygall Road"],
+    tips: ["2nd gear approaching roundabouts at 20km/h", "Read road markings 50m ahead at roundabouts", "Bus lanes: check hours on signs — 7-10am & 4-7pm"]
+    },
+  {
+    id: "f4", name: "Finglas Village", centre: "Finglas", difficulty: 4, duration: 27, distance: "9.6km",
+    description: "Jamestown → N2 → Finglas Village one-way → Seamus Ennis Rd → Beneavin → return. #1 fail zone.",
+    focus: ["right turns at lights", "one-way system", "lane discipline", "traffic-controlled junctions"],
+    origin:FINGLAS, dest:FINGLAS,
+    addressWaypoints: [
+    "Old+Finglas+Road,+Finglas,+Dublin+11",
+    "Finglas+Road,+Finglas+Village,+Dublin+11",
+    "Seamus+Ennis+Road,+Finglas,+Dublin+11",
+    "Beneavin+Road,+Finglas,+Dublin+11",
+    "Ballygall+Road+East,+Dublin+11"
+    ],
+    waypoints: [
+    { name: "Finglas Centre", lat: 53.3899, lng: -6.2967, type: "start" },
+    { name: "Old Finglas Road", lat: 53.3850, lng: -6.2820, type: "waypoint" },
+    { name: "Finglas Village", lat: 53.3905, lng: -6.2985, type: "hazard", note: "#1 FAIL — right turn, one-way system" },
+    { name: "Seamus Ennis Road", lat: 53.3920, lng: -6.2960, type: "waypoint" },
+    { name: "Beneavin Road", lat: 53.3880, lng: -6.2870, type: "waypoint" },
+    { name: "Ballygall Road East", lat: 53.3840, lng: -6.2830, type: "hazard", note: "Traffic light sequence — don't block junction" }
+    ],
+    hazards: ["Right turn through Finglas Village — extremely busy, 2nd right turn", "One-way street in village — cars overtake on outside", "N2 junction — fast traffic merge", "Multiple traffic-controlled junctions in sequence"],
+    tips: ["The village right turn is NOT the first right you see", "Watch for cars overtaking on the outside when turning right", "Position early in the correct lane — last-minute changes fail here", "Progress through lights — hesitation gets marked"]
+    },
+  {
+    id: "f5", name: "Glasnevin North", centre: "Finglas", difficulty: 3, duration: 30, distance: "12.3km",
+    description: "Glasnevin Ave → Tolka Estate → Griffith Ave Extension → Ballygall Rd East → return",
+    focus: ["crossroads", "traffic lights", "observation", "speed management"],
+    origin:FINGLAS, dest:FINGLAS,
+    addressWaypoints: [
+    "Glasnevin+Avenue,+Dublin+11",
+    "Tolka+Estate,+Finglas,+Dublin+11",
+    "Griffith+Avenue+Extension,+Dublin+11",
+    "Ballygall+Road+East,+Dublin+11"
+    ],
+    waypoints: [
+    { name: "Finglas Centre", lat: 53.3899, lng: -6.2967, type: "start" },
+    { name: "Glasnevin Avenue", lat: 53.3820, lng: -6.2880, type: "waypoint" },
+    { name: "Tolka Estate", lat: 53.3790, lng: -6.2810, type: "waypoint" },
+    { name: "Griffith Ave Extension", lat: 53.3780, lng: -6.2790, type: "hazard", note: "Crossroads — full observation" },
+    { name: "Ballygall Road East", lat: 53.3840, lng: -6.2830, type: "hazard", note: "Traffic lights in sequence" }
+    ],
+    hazards: ["Crossroads at Griffith Avenue Extension", "Speed limit transitions 50→60→50", "Bus stops — check for pedestrians", "Staggered junctions"],
+    tips: ["Full MSPSL at every junction", "Anticipate lights — ease off early rather than harsh braking", "Keep left unless overtaking or turning right"]
+    },
+  {
+    id: "f6", name: "Pinewood Hill Circuit", centre: "Finglas", difficulty: 3, duration: 19, distance: "6.6km",
+    description: "Willow Park → Pinewood Ave → Cedarwood Rise → hill start → return via Glasnevin Ave",
+    focus: ["hill start", "mini roundabouts", "turnabout", "residential bends"],
+    origin:FINGLAS, dest:FINGLAS,
+    addressWaypoints: [
+    "Willow+Park+Road,+Finglas,+Dublin+11",
+    "Pinewood+Avenue,+Finglas,+Dublin+11",
+    "Cedarwood+Rise,+Finglas,+Dublin+11",
+    "Willow+Park+Crescent,+Finglas,+Dublin+11",
+    "Grove+Park+Road,+Finglas,+Dublin+11"
+    ],
+    waypoints: [
+    { name: "Finglas Centre", lat: 53.3899, lng: -6.2967, type: "start" },
+    { name: "Willow Park Road", lat: 53.3810, lng: -6.2850, type: "waypoint" },
+    { name: "Pinewood Avenue", lat: 53.3815, lng: -6.2835, type: "waypoint" },
+    { name: "Cedarwood Rise", lat: 53.3930, lng: -6.2925, type: "manoeuvre", note: "Hill start after the bend" },
+    { name: "Willow Park Crescent", lat: 53.3808, lng: -6.2845, type: "waypoint" },
+    { name: "Grove Park Road", lat: 53.3812, lng: -6.2855, type: "manoeuvre", note: "Turnabout" }
+    ],
+    hazards: ["Hill start on Cedarwood Rise — moderate gradient", "Mini roundabout at Willow Park", "Tight residential bends", "Parked cars on both sides"],
+    tips: ["Handbrake up fully for hill start — find bite point before releasing", "Signal early at mini roundabouts", "1m clearance from parked cars minimum"]
+    },
+  {
+    id: "f7", name: "Full Finglas Simulation", centre: "Finglas", difficulty: 5, duration: 37, distance: "14.4km",
+    description: "All manoeuvres, village one-way, N2 junction, roundabouts, estates. The gauntlet.",
+    focus: ["everything", "endurance", "test simulation"],
+    origin:FINGLAS, dest:FINGLAS,
+    addressWaypoints: [
+    "Clancy+Avenue,+Finglas,+Dublin+11",
+    "McKee+Road,+Finglas,+Dublin+11",
+    "Ballygall+Road+West,+Finglas,+Dublin+11",
+    "Willow+Park+Road,+Finglas,+Dublin+11",
+    "Finglas+Road,+Finglas+Village,+Dublin+11",
+    "Seamus+Ennis+Road,+Finglas,+Dublin+11"
+    ],
+    waypoints: [
+    { name: "Finglas Centre", lat: 53.3899, lng: -6.2967, type: "start" },
+    { name: "Clancy Avenue", lat: 53.3907, lng: -6.2930, type: "hazard", note: "Sharp left turn" },
+    { name: "McKee Road", lat: 53.3888, lng: -6.2895, type: "manoeuvre", note: "Hill start" },
+    { name: "Ballygall Road", lat: 53.3825, lng: -6.2870, type: "waypoint" },
+    { name: "Willow Park", lat: 53.3810, lng: -6.2850, type: "manoeuvre", note: "Turnabout" },
+    { name: "Finglas Village", lat: 53.3905, lng: -6.2985, type: "hazard", note: "One-way right turn" },
+    { name: "Seamus Ennis Road", lat: 53.3920, lng: -6.2960, type: "waypoint" }
+    ],
+    hazards: ["Everything combined", "35-minute fatigue", "Multiple manoeuvre types", "Heavy traffic in village"],
+    tips: ["Only attempt after completing other Finglas routes twice", "Practice at expected test time", "If you handle this, the test feels easier"]
+    },
+  {
+    id: "t1", name: "Redwood Residential", centre: "Tallaght", difficulty: 2, duration: 25, distance: "11.0km",
+    description: "Broomhill → Greenhills → Mayberry Rd → Redwood estate → reverse & turnabout → return",
+    focus: ["reverse around corner", "turnabout", "speed ramps", "residential"],
+    origin:TALLAGHT, dest:TALLAGHT,
+    addressWaypoints: [
+    "Greenhills+Road,+Tallaght,+Dublin+24",
+    "Mayberry+Road,+Tallaght,+Dublin+24",
+    "Redwood+Drive,+Tallaght,+Dublin+24",
+    "Redwood+Park,+Tallaght,+Dublin+24"
+    ],
+    waypoints: [
+    { name: "Tallaght Centre", lat: 53.2899, lng: -6.3568, type: "start" },
+    { name: "Greenhills Road", lat: 53.2920, lng: -6.3540, type: "waypoint" },
+    { name: "Mayberry Road", lat: 53.2895, lng: -6.3490, type: "waypoint" },
+    { name: "Redwood Drive", lat: 53.2880, lng: -6.3470, type: "manoeuvre", note: "Reverse into Redwood Way" },
+    { name: "Redwood Park", lat: 53.2870, lng: -6.3465, type: "manoeuvre", note: "Turnabout near end of road" }
+    ],
+    hazards: ["Speed ramps on Mayberry Road", "Parked cars in Redwood estate", "Children in residential areas", "Tight junctions in estate"],
+    tips: ["2nd gear for speed ramps at 20km/h", "Full observation before reversing", "Redwood Way is the classic reverse spot — practice it"]
+    },
+  {
+    id: "t2", name: "Kilnamanagh Loop", centre: "Tallaght", difficulty: 2, duration: 39, distance: "16.4km",
+    description: "Airton Rd → Belgard Rd → Kilnamanagh estate → manoeuvres → return",
+    focus: ["dual carriageway", "roundabouts", "residential manoeuvres", "speed management"],
+    origin:TALLAGHT, dest:TALLAGHT,
+    addressWaypoints: [
+    "Airton+Road,+Tallaght,+Dublin+24",
+    "Belgard+Road,+Tallaght,+Dublin+24",
+    "Kilnamanagh+Road,+Tallaght,+Dublin+24",
+    "Parkhill+Road,+Tallaght,+Dublin+24"
+    ],
+    waypoints: [
+    { name: "Tallaght Centre", lat: 53.2899, lng: -6.3568, type: "start" },
+    { name: "Airton Road", lat: 53.2910, lng: -6.3530, type: "waypoint" },
+    { name: "Belgard Road", lat: 53.2920, lng: -6.3490, type: "hazard", note: "60km/h dual carriageway" },
+    { name: "Kilnamanagh", lat: 53.2870, lng: -6.3460, type: "waypoint" },
+    { name: "Parkhill Road", lat: 53.2860, lng: -6.3450, type: "manoeuvre", note: "Hill start — moderate slope" }
+    ],
+    hazards: ["Belgard Road is 60km/h dual carriageway — match speed", "Roundabout entry — lane position", "Speed ramps in Kilnamanagh", "School zone near estate"],
+    tips: ["Build to 60km/h on Belgard Road — don't stay at 50", "Lane position early at roundabouts", "Drop to 2nd gear for estate ramps"]
+    },
+  {
+    id: "t3", name: "Cookstown Industrial", centre: "Tallaght", difficulty: 3, duration: 21, distance: "8.6km",
+    description: "Belgard Rd → Belgard Square → Cookstown Way → Industrial Estate → Old Belgard Rd → return",
+    focus: ["roundabouts", "lane changes", "industrial roads", "traffic lights"],
+    origin:TALLAGHT, dest:TALLAGHT,
+    addressWaypoints: [
+    "Airton+Road,+Tallaght,+Dublin+24",
+    "Belgard+Road,+Tallaght,+Dublin+24",
+    "Belgard+Square+North,+Tallaght,+Dublin+24",
+    "Cookstown+Way,+Tallaght,+Dublin+24",
+    "Old+Belgard+Road,+Tallaght,+Dublin+24"
+    ],
+    waypoints: [
+    { name: "Tallaght Centre", lat: 53.2899, lng: -6.3568, type: "start" },
+    { name: "Airton Road", lat: 53.2910, lng: -6.3530, type: "waypoint" },
+    { name: "Belgard Square North", lat: 53.2940, lng: -6.3460, type: "hazard", note: "Multiple roundabouts in sequence" },
+    { name: "Cookstown Way", lat: 53.2955, lng: -6.3440, type: "waypoint" },
+    { name: "Old Belgard Road", lat: 53.2935, lng: -6.3420, type: "waypoint" }
+    ],
+    hazards: ["Multiple roundabouts in quick succession", "Lane changes on dual carriageway", "Luas line crossing near Belgard Square", "Industrial traffic — large vehicles"],
+    tips: ["Scan road markings well ahead at each roundabout", "MSPSL for every lane change", "Check for Luas trams at crossings — they have priority", "Industrial vehicles have wide turning circles — give space"]
+    },
+  {
+    id: "t4", name: "Tallaght Village Right Turn", centre: "Tallaght", difficulty: 4, duration: 30, distance: "11.3km",
+    description: "Greenhills → Tallaght Village → right turn onto Greenhills Rd → Bancroft → return. #1 fail zone.",
+    focus: ["right turn at lights", "hatch markings", "lane discipline", "residential manoeuvres"],
+    origin:TALLAGHT, dest:TALLAGHT,
+    addressWaypoints: [
+    "Greenhills+Road,+Tallaght,+Dublin+24",
+    "Main+Road,+Tallaght+Village,+Dublin+24",
+    "Bancroft+Road,+Tallaght,+Dublin+24",
+    "Castletymon+Road,+Tallaght,+Dublin+24",
+    "St+Aongus+Road,+Tallaght,+Dublin+24"
+    ],
+    waypoints: [
+    { name: "Tallaght Centre", lat: 53.2899, lng: -6.3568, type: "start" },
+    { name: "Greenhills Road", lat: 53.2920, lng: -6.3540, type: "waypoint" },
+    { name: "Tallaght Village", lat: 53.2870, lng: -6.3570, type: "hazard", note: "#1 FAIL — right turn, hatch markings" },
+    { name: "Bancroft Road", lat: 53.2855, lng: -6.3580, type: "manoeuvre", note: "Reverse around corner" },
+    { name: "Castletymon Road", lat: 53.2840, lng: -6.3560, type: "waypoint" },
+    { name: "St Aongus Road", lat: 53.2830, lng: -6.3550, type: "manoeuvre", note: "Turnabout in St Aongus Crescent" }
+    ],
+    hazards: ["Right turn at village lights — DO NOT enter hatch markings", "Congested junction — cars block the box", "Tallaght Main Road — busy both directions", "School zones on Castletymon Road"],
+    tips: ["Wait for proper lane AFTER hatch markings — at the arrow", "Keep right to show intention — lets left traffic pass", "You cannot get faulted for obeying rules of the road", "Enter right lane only when markings allow"]
+    },
+  {
+    id: "t5", name: "Tymon North", centre: "Tallaght", difficulty: 3, duration: 46, distance: "23.1km",
+    description: "Greenhills → Tymon Rd North → St Aongus → Castle Lawns → manoeuvres → return",
+    focus: ["roundabouts", "speed ramps", "residential manoeuvres", "observation"],
+    origin:TALLAGHT, dest:TALLAGHT,
+    addressWaypoints: [
+    "Greenhills+Road,+Tallaght,+Dublin+24",
+    "Tymon+Road+North,+Tallaght,+Dublin+24",
+    "St+Aongus+Road,+Tallaght,+Dublin+24",
+    "Castle+Lawns,+Tallaght,+Dublin+24"
+    ],
+    waypoints: [
+    { name: "Tallaght Centre", lat: 53.2899, lng: -6.3568, type: "start" },
+    { name: "Greenhills Road", lat: 53.2920, lng: -6.3540, type: "waypoint" },
+    { name: "Tymon Road North", lat: 53.2860, lng: -6.3510, type: "waypoint" },
+    { name: "St Aongus Road", lat: 53.2830, lng: -6.3550, type: "manoeuvre", note: "Multiple manoeuvre opportunities" },
+    { name: "Castle Lawns", lat: 53.2825, lng: -6.3545, type: "manoeuvre", note: "Reverse and turnabout" }
+    ],
+    hazards: ["Speed ramps throughout Tymon North", "Roundabout at St Aongus — 3rd exit common", "School proximity", "Narrow estate roads with parked cars"],
+    tips: ["Slow and steady over ramps — hitting them fast = Grade 2 fault", "Castle Lawns has numerous manoeuvre spots", "30km/h in residential areas with ramps"]
+    },
+  {
+    id: "t6", name: "Belgard Heights & Cookstown", centre: "Tallaght", difficulty: 3, duration: 37, distance: "15.5km",
+    description: "Belgard Rd → Belgard Heights → Cookstown Rd → Old Belgard Rd → return",
+    focus: ["roundabouts", "lane changes", "hill start", "reverse"],
+    origin:TALLAGHT, dest:TALLAGHT,
+    addressWaypoints: [
+    "Airton+Road,+Tallaght,+Dublin+24",
+    "Belgard+Road,+Tallaght,+Dublin+24",
+    "Belgard+Heights,+Tallaght,+Dublin+24",
+    "Cookstown+Road,+Tallaght,+Dublin+24",
+    "Old+Belgard+Road,+Tallaght,+Dublin+24"
+    ],
+    waypoints: [
+    { name: "Tallaght Centre", lat: 53.2899, lng: -6.3568, type: "start" },
+    { name: "Airton Road", lat: 53.2910, lng: -6.3530, type: "waypoint" },
+    { name: "Belgard Heights", lat: 53.2945, lng: -6.3435, type: "manoeuvre", note: "Reverse, turnabout, hill start all possible" },
+    { name: "Cookstown Road", lat: 53.2950, lng: -6.3430, type: "waypoint" },
+    { name: "Old Belgard Road", lat: 53.2935, lng: -6.3420, type: "waypoint" }
+    ],
+    hazards: ["Multiple roundabouts in Cookstown area", "Lane changes on Belgard Road", "School near Belgard Heights", "Industrial traffic"],
+    tips: ["Belgard Heights is a common all-in-one manoeuvre spot", "Plan your lane 100m before roundabouts", "Industrial estate roads can be deceptively wide — stay left"]
+    },
+  {
+    id: "t7", name: "Full Tallaght Simulation", centre: "Tallaght", difficulty: 5, duration: 55, distance: "23.7km",
+    description: "Village right turn, dual carriageway, Cookstown, residential manoeuvres. Everything.",
+    focus: ["everything", "endurance", "test simulation"],
+    origin:TALLAGHT, dest:TALLAGHT,
+    addressWaypoints: [
+    "Greenhills+Road,+Tallaght,+Dublin+24",
+    "Main+Road,+Tallaght+Village,+Dublin+24",
+    "Airton+Road,+Tallaght,+Dublin+24",
+    "Belgard+Road,+Tallaght,+Dublin+24",
+    "Cookstown+Way,+Tallaght,+Dublin+24",
+    "Redwood+Drive,+Tallaght,+Dublin+24"
+    ],
+    waypoints: [
+    { name: "Tallaght Centre", lat: 53.2899, lng: -6.3568, type: "start" },
+    { name: "Tallaght Village", lat: 53.2870, lng: -6.3570, type: "hazard", note: "Right turn — hatch markings" },
+    { name: "Belgard Road", lat: 53.2920, lng: -6.3490, type: "hazard", note: "60km/h dual carriageway" },
+    { name: "Cookstown Way", lat: 53.2955, lng: -6.3440, type: "waypoint" },
+    { name: "Redwood Drive", lat: 53.2880, lng: -6.3470, type: "manoeuvre", note: "Reverse" },
+    { name: "Parkhill Road", lat: 53.2860, lng: -6.3450, type: "manoeuvre", note: "Hill start" }
+    ],
+    hazards: ["Everything combined", "40-minute concentration required", "Mix of 50/60km/h zones", "Tester may vary the route"],
+    tips: ["Only after completing other Tallaght routes", "Practice at your scheduled test time", "Handle this and the test feels lighter"]
+    },
+  {
+    id: "c1", name: "Landscape Local", centre: "Churchtown", difficulty: 1, duration: 22, distance: "9.3km",
+    description: "Braemor Rd → Landscape Park → Landscape Ave → reverse & turnabout → return. Confidence builder.",
+    focus: ["residential junctions", "reverse", "turnabout", "observation"],
+    origin:CHURCHTOWN, dest:CHURCHTOWN,
+    addressWaypoints: [
+    "Braemor+Road,+Churchtown,+Dublin+14",
+    "Landscape+Park,+Churchtown,+Dublin+14",
+    "Landscape+Avenue,+Churchtown,+Dublin+14"
+    ],
+    waypoints: [
+    { name: "Churchtown Centre", lat: 53.3075, lng: -6.2655, type: "start" },
+    { name: "Braemor Road", lat: 53.3070, lng: -6.2650, type: "hazard", note: "Steep gradient leaving centre" },
+    { name: "Landscape Park", lat: 53.3060, lng: -6.2640, type: "manoeuvre", note: "Reverse into side road" },
+    { name: "Landscape Avenue", lat: 53.3055, lng: -6.2635, type: "manoeuvre", note: "Turnabout" }
+    ],
+    hazards: ["Test centre exit — steep gradient, poor visibility", "Heavy on-street parking", "Pedestrians from Churchtown Stores", "Narrow roads"],
+    tips: ["Crawl out of the test centre — stop and look both ways", "This is the gentlest introduction to the area", "Master the centre exit before anything else"]
+    },
+  {
+    id: "c2", name: "Orwell & Dartry", centre: "Churchtown", difficulty: 3, duration: 24, distance: "8.3km",
+    description: "Orwell Rd → Orwell Park → Dartry Rd → Temple Rd reverse → Highfield Rd → return",
+    focus: ["hill start", "reverse around corner", "traffic lights", "lane discipline"],
+    origin:CHURCHTOWN, dest:CHURCHTOWN,
+    addressWaypoints: [
+    "Orwell+Road,+Rathgar,+Dublin+6",
+    "Orwell+Park,+Rathgar,+Dublin+6",
+    "Dartry+Road,+Dublin+6",
+    "Temple+Road,+Dartry,+Dublin+6",
+    "Highfield+Road,+Rathgar,+Dublin+6"
+    ],
+    waypoints: [
+    { name: "Churchtown Centre", lat: 53.3075, lng: -6.2655, type: "start" },
+    { name: "Orwell Road", lat: 53.3100, lng: -6.2670, type: "waypoint" },
+    { name: "Orwell Park", lat: 53.3105, lng: -6.2680, type: "waypoint" },
+    { name: "Dartry Road", lat: 53.3115, lng: -6.2620, type: "hazard", note: "Multiple traffic light junctions" },
+    { name: "Temple Road", lat: 53.3130, lng: -6.2610, type: "manoeuvre", note: "Reverse into first side road" },
+    { name: "Highfield Road", lat: 53.3145, lng: -6.2640, type: "waypoint" }
+    ],
+    hazards: ["Dartry Road — multiple complex junctions", "On-street parking narrows roads significantly", "Cyclists on Highfield Road", "Right turn filter lanes — position correctly"],
+    tips: ["Temple Road is the classic Churchtown reverse spot", "Bus lanes have hours — check signs", "Position early for right turns at lights"]
+    },
+  {
+    id: "c3", name: "Rathmines & Cowper", centre: "Churchtown", difficulty: 4, duration: 26, distance: "9.5km",
+    description: "Orwell → Dartry → Neville Rd → Rathmines Rd Upper → Cowper Rd → Palmerston → return",
+    focus: ["complex junctions", "right turns at lights", "bus lanes", "lane changes"],
+    origin:CHURCHTOWN, dest:CHURCHTOWN,
+    addressWaypoints: [
+    "Orwell+Road,+Rathgar,+Dublin+6",
+    "Dartry+Road,+Dublin+6",
+    "Highfield+Road,+Rathgar,+Dublin+6",
+    "Rathmines+Road+Upper,+Dublin+6",
+    "Cowper+Road,+Dublin+6",
+    "Palmerston+Road,+Dublin+6"
+    ],
+    waypoints: [
+    { name: "Churchtown Centre", lat: 53.3075, lng: -6.2655, type: "start" },
+    { name: "Orwell Road", lat: 53.3100, lng: -6.2670, type: "waypoint" },
+    { name: "Dartry Road", lat: 53.3115, lng: -6.2620, type: "waypoint" },
+    { name: "Highfield Road", lat: 53.3145, lng: -6.2640, type: "waypoint" },
+    { name: "Rathmines Rd Upper", lat: 53.3175, lng: -6.2650, type: "hazard", note: "Bus lanes, heavy traffic" },
+    { name: "Cowper Road", lat: 53.3170, lng: -6.2620, type: "waypoint" },
+    { name: "Palmerston Road", lat: 53.3160, lng: -6.2600, type: "hazard", note: "Tight with parked cars both sides" }
+    ],
+    hazards: ["Bus lanes on Rathmines Road — check operational hours", "Right turn filter lanes — mirror work critical", "Heavy on-street parking on Palmerston", "Cyclists in cycle lanes — check before turning left"],
+    tips: ["Mirror, signal, position EARLY for every right turn", "Bus lanes: Mon-Sat 7-10am & 4-7pm typically", "Palmerston is elegant but tight — 1m from parked cars", "This route tests junction-to-junction concentration"]
+    },
+  {
+    id: "c4", name: "Dropping Well Hill", centre: "Churchtown", difficulty: 3, duration: 20, distance: "7.7km",
+    description: "Dartry → Dropping Well pub hill start → Milltown Rd → Churchtown Rd Lower → return",
+    focus: ["hill start", "steep gradients", "traffic lights", "observation"],
+    origin:CHURCHTOWN, dest:CHURCHTOWN,
+    addressWaypoints: [
+    "Orwell+Road,+Rathgar,+Dublin+6",
+    "Orwell+Park,+Rathgar,+Dublin+6",
+    "Dartry+Road,+Dublin+6",
+    "Milltown+Road,+Dublin+6",
+    "Churchtown+Road+Lower,+Dublin+14"
+    ],
+    waypoints: [
+    { name: "Churchtown Centre", lat: 53.3075, lng: -6.2655, type: "start" },
+    { name: "Orwell Park", lat: 53.3105, lng: -6.2680, type: "waypoint" },
+    { name: "Dartry Road", lat: 53.3115, lng: -6.2620, type: "waypoint" },
+    { name: "Dropping Well", lat: 53.3090, lng: -6.2580, type: "manoeuvre", note: "Hill start — steep gradient" },
+    { name: "Milltown Road", lat: 53.3080, lng: -6.2570, type: "waypoint" },
+    { name: "Churchtown Rd Lower", lat: 53.3070, lng: -6.2600, type: "manoeuvre", note: "Second hill start opportunity" }
+    ],
+    hazards: ["Dropping Well hill — steep, traffic behind you", "Dartry Road bend — reduced visibility", "Churchtown Road Lower gradient", "Traffic lights in quick succession"],
+    tips: ["Handbrake fully up on the hill — no rollback tolerated", "Find bite point before checking mirrors and releasing", "Churchtown Rd Lower is a common hill start backup spot"]
+    },
+  {
+    id: "c5", name: "Eaton Brae & Rathfarnham", centre: "Churchtown", difficulty: 3, duration: 22, distance: "8.7km",
+    description: "Orwell Rd → Eaton Brae → Woodside Drive → Riverside Drive → return via Braemor",
+    focus: ["turnabout", "reverse", "hill start", "residential bends"],
+    origin:CHURCHTOWN, dest:CHURCHTOWN,
+    addressWaypoints: [
+    "Orwell+Road,+Rathgar,+Dublin+6",
+    "Eaton+Brae,+Rathgar,+Dublin+6",
+    "Woodside+Drive,+Rathfarnham,+Dublin+14",
+    "Riverside+Drive,+Rathfarnham,+Dublin+14",
+    "Braemor+Road,+Churchtown,+Dublin+14"
+    ],
+    waypoints: [
+    { name: "Churchtown Centre", lat: 53.3075, lng: -6.2655, type: "start" },
+    { name: "Orwell Road", lat: 53.3100, lng: -6.2670, type: "waypoint" },
+    { name: "Eaton Brae", lat: 53.3085, lng: -6.2690, type: "manoeuvre", note: "Turnabout" },
+    { name: "Woodside Drive", lat: 53.3050, lng: -6.2620, type: "manoeuvre", note: "Hill start" },
+    { name: "Riverside Drive", lat: 53.3045, lng: -6.2615, type: "manoeuvre", note: "Reverse around corner" }
+    ],
+    hazards: ["Eaton Brae is narrow — check for oncoming", "Woodside Drive has a gradient", "Parked cars everywhere in these estates", "Blind corners in residential areas"],
+    tips: ["Eaton Brae and Green Park are classic turnabout/reverse spots", "Riverside Drive: reverse around both corners for practice", "These estates are quiet but testers expect full observation"]
+    },
+  {
+    id: "c6", name: "Rathgar Village", centre: "Churchtown", difficulty: 4, duration: 26, distance: "9.3km",
+    description: "Orwell → Rathgar Village lights → Church Ave → Rathmines → Dartry → return",
+    focus: ["complex junctions", "right turns at lights", "bus lanes", "lane discipline"],
+    origin:CHURCHTOWN, dest:CHURCHTOWN,
+    addressWaypoints: [
+    "Orwell+Road,+Rathgar,+Dublin+6",
+    "Rathgar+Road,+Rathgar,+Dublin+6",
+    "Church+Avenue,+Rathmines,+Dublin+6",
+    "Rathmines+Road+Upper,+Dublin+6",
+    "Dartry+Road,+Dublin+6"
+    ],
+    waypoints: [
+    { name: "Churchtown Centre", lat: 53.3075, lng: -6.2655, type: "start" },
+    { name: "Orwell Road", lat: 53.3100, lng: -6.2670, type: "waypoint" },
+    { name: "Rathgar Village", lat: 53.3130, lng: -6.2700, type: "hazard", note: "Complex junction — multiple lanes" },
+    { name: "Church Avenue", lat: 53.3180, lng: -6.2660, type: "waypoint" },
+    { name: "Rathmines Rd Upper", lat: 53.3175, lng: -6.2650, type: "hazard", note: "Bus lanes, heavy traffic" },
+    { name: "Dartry Road", lat: 53.3115, lng: -6.2620, type: "waypoint" }
+    ],
+    hazards: ["Rathgar Village junction — complex traffic light phasing", "Bus lanes on approach to Rathmines", "Church Avenue — drive left of the church", "Right turn from Palmerston Rd — heavy traffic"],
+    tips: ["Know the lane layout at Rathgar Village before you arrive", "Church Avenue wraps around the church — stay left", "This is the toughest direction from Churchtown — save it for later"]
+    },
+  {
+    id: "c7", name: "Full Churchtown Simulation", centre: "Churchtown", difficulty: 5, duration: 39, distance: "15.6km",
+    description: "Centre exit, Rathgar, Rathmines, Dartry, all manoeuvres. Hardest Dublin centre at full intensity.",
+    focus: ["everything", "endurance", "test simulation"],
+    origin:CHURCHTOWN, dest:CHURCHTOWN,
+    addressWaypoints: [
+    "Orwell+Road,+Rathgar,+Dublin+6",
+    "Dartry+Road,+Dublin+6",
+    "Temple+Road,+Dartry,+Dublin+6",
+    "Rathmines+Road+Upper,+Dublin+6",
+    "Milltown+Road,+Dublin+6",
+    "Churchtown+Road+Lower,+Dublin+14"
+    ],
+    waypoints: [
+    { name: "Churchtown Centre", lat: 53.3075, lng: -6.2655, type: "start" },
+    { name: "Orwell Road", lat: 53.3100, lng: -6.2670, type: "waypoint" },
+    { name: "Temple Road", lat: 53.3130, lng: -6.2610, type: "manoeuvre", note: "Reverse" },
+    { name: "Rathmines Rd", lat: 53.3175, lng: -6.2650, type: "hazard", note: "Bus lanes" },
+    { name: "Dropping Well", lat: 53.3090, lng: -6.2580, type: "manoeuvre", note: "Hill start" },
+    { name: "Churchtown Rd Lower", lat: 53.3070, lng: -6.2600, type: "waypoint" }
+    ],
+    hazards: ["Everything combined — the hardest Dublin test simulation", "40 minutes of tight streets, hills, bus lanes", "Fatigue in the final third", "Tester may deviate from familiar patterns"],
+    tips: ["Only after mastering other Churchtown routes", "The centre exit alone can set the tone — nail it first", "If you pass this, Churchtown test day feels manageable"]
+    },
+  {
+    id: "d1", name: "Watsons Estate", centre: "Dún Laoghaire", difficulty: 2, duration: 25, distance: "12.0km",
+    description: "Pottery Rd → Johnstown Rd → Watsons Estate → all manoeuvres → return. Confidence builder.",
+    focus: ["reverse around corner", "turnabout", "hill start", "residential"],
+    origin:DUN_LAOGHAIRE, dest:DUN_LAOGHAIRE,
+    addressWaypoints: [
+    "Pottery+Road,+Dun+Laoghaire,+Co+Dublin",
+    "Johnstown+Road,+Dun+Laoghaire,+Co+Dublin",
+    "Rochestown+Avenue,+Dun+Laoghaire,+Co+Dublin"
+    ],
+    waypoints: [
+    { name: "Dún Laoghaire Centre", lat: 53.2842, lng: -6.1533, type: "start" },
+    { name: "Pottery Road", lat: 53.2845, lng: -6.1540, type: "waypoint" },
+    { name: "Johnstown Road", lat: 53.2850, lng: -6.1555, type: "waypoint" },
+    { name: "Watsons Estate", lat: 53.2860, lng: -6.1570, type: "manoeuvre", note: "Classic manoeuvre spot — reverse, turnabout, hill start" }
+    ],
+    hazards: ["15km/h speed limit leaving test centre", "Parked cars on estate roads", "Pedestrians in estate", "Mild gradient for hill start"],
+    tips: ["Watsons Estate is THE manoeuvre spot — know it inside out", "Slow right down exiting the test centre car park", "This is the easiest Dún Laoghaire route — build confidence here"]
+    },
+  {
+    id: "d2", name: "Monkstown Farm Loop", centre: "Dún Laoghaire", difficulty: 3, duration: 17, distance: "7.5km",
+    description: "Bakers Corner → Monkstown Farm → Sallynoggin → roundabouts → return",
+    focus: ["roundabouts", "traffic lights", "lane changes", "observation"],
+    origin:DUN_LAOGHAIRE, dest:DUN_LAOGHAIRE,
+    addressWaypoints: [
+    "Kill+Avenue,+Dun+Laoghaire,+Co+Dublin",
+    "Monkstown+Farm,+Dun+Laoghaire,+Co+Dublin",
+    "Sallynoggin+Road,+Dun+Laoghaire,+Co+Dublin",
+    "Rochestown+Avenue,+Dun+Laoghaire,+Co+Dublin"
+    ],
+    waypoints: [
+    { name: "Dún Laoghaire Centre", lat: 53.2842, lng: -6.1533, type: "start" },
+    { name: "Bakers Corner", lat: 53.2850, lng: -6.1515, type: "hazard", note: "Complex junction — filter light" },
+    { name: "Kill Avenue", lat: 53.2855, lng: -6.1500, type: "waypoint" },
+    { name: "Monkstown Farm", lat: 53.2870, lng: -6.1480, type: "waypoint" },
+    { name: "Sallynoggin Road", lat: 53.2830, lng: -6.1460, type: "waypoint" },
+    { name: "Graduate Roundabout", lat: 53.2835, lng: -6.1490, type: "hazard", note: "Lane position critical" }
+    ],
+    hazards: ["Bakers Corner right turn — wait for filter or clear gap", "Graduate roundabout — lane discipline", "Sallynoggin Road — speed limit changes", "Mini roundabouts in sequence"],
+    tips: ["Bakers Corner: use the right slip lane, wait for filter light", "Graduate roundabout: left lane for 1st exit, right for 2nd/3rd", "Keep scanning ahead — roundabouts come fast in this area"]
+    },
+  {
+    id: "d3", name: "Glenageary & Killiney", centre: "Dún Laoghaire", difficulty: 3, duration: 24, distance: "11.8km",
+    description: "Sallynoggin → Glenageary roundabout → Killiney Rd → Ballinclea Rd → Cluny Grove → return",
+    focus: ["roundabouts", "residential manoeuvres", "speed management", "observation"],
+    origin:DUN_LAOGHAIRE, dest:DUN_LAOGHAIRE,
+    addressWaypoints: [
+    "Sallynoggin+Road,+Dun+Laoghaire,+Co+Dublin",
+    "Glenageary+Road,+Glenageary,+Co+Dublin",
+    "Killiney+Road,+Killiney,+Co+Dublin",
+    "Ballinclea+Road,+Killiney,+Co+Dublin",
+    "Cluny+Grove,+Killiney,+Co+Dublin"
+    ],
+    waypoints: [
+    { name: "Dún Laoghaire Centre", lat: 53.2842, lng: -6.1533, type: "start" },
+    { name: "Sallynoggin Road", lat: 53.2830, lng: -6.1460, type: "waypoint" },
+    { name: "Glenageary Roundabout", lat: 53.2810, lng: -6.1440, type: "hazard", note: "Busy roundabout — lane discipline" },
+    { name: "Killiney Road", lat: 53.2780, lng: -6.1420, type: "waypoint" },
+    { name: "Ballinclea Road", lat: 53.2770, lng: -6.1410, type: "waypoint" },
+    { name: "Cluny Grove", lat: 53.2775, lng: -6.1415, type: "manoeuvre", note: "Reverse or turnabout in cul-de-sac" }
+    ],
+    hazards: ["Glenageary roundabout — 3rd exit requires right lane", "Killiney Road — 60km/h sections", "Ballinclea Road — narrow with parked cars", "Cluny Grove cul-de-sac — tight reverse"],
+    tips: ["Glenageary roundabout: signal and position early", "Match 60km/h on Killiney Road — don't hold up traffic", "Cluny Grove: check for cars before committing to reverse"]
+    },
+  {
+    id: "d4", name: "Bakers Corner Challenge", centre: "Dún Laoghaire", difficulty: 4, duration: 20, distance: "7.8km",
+    description: "Bakers Corner → Kill Ave → IADT → Ashgrove → Ardmore Park → Rochestown Ave → return",
+    focus: ["complex junctions", "right turns", "hill start", "observation"],
+    origin:DUN_LAOGHAIRE, dest:DUN_LAOGHAIRE,
+    addressWaypoints: [
+    "Kill+Avenue,+Dun+Laoghaire,+Co+Dublin",
+    "Ashgrove,+Dun+Laoghaire,+Co+Dublin",
+    "Ardmore+Park,+Dun+Laoghaire,+Co+Dublin",
+    "Rochestown+Avenue,+Dun+Laoghaire,+Co+Dublin",
+    "Sallynoggin+Road,+Dun+Laoghaire,+Co+Dublin"
+    ],
+    waypoints: [
+    { name: "Dún Laoghaire Centre", lat: 53.2842, lng: -6.1533, type: "start" },
+    { name: "Bakers Corner", lat: 53.2850, lng: -6.1515, type: "hazard", note: "#1 FAIL — right turn, filter light" },
+    { name: "Kill Avenue", lat: 53.2855, lng: -6.1500, type: "waypoint" },
+    { name: "Ashgrove", lat: 53.2860, lng: -6.1485, type: "waypoint" },
+    { name: "Ardmore Park", lat: 53.2865, lng: -6.1475, type: "manoeuvre", note: "Turnabout and mild hill start" },
+    { name: "Rochestown Avenue", lat: 53.2855, lng: -6.1505, type: "hazard", note: "Mini roundabouts in sequence" }
+    ],
+    hazards: ["Bakers Corner — filter light timing, oncoming traffic", "Multiple mini roundabouts on Rochestown Ave", "Narrow roads near IADT", "Pedestrians near schools and shops"],
+    tips: ["Bakers Corner: DON'T go unless filter is green or gap is clear", "Ardmore Park has mild hill — good for confidence on hill starts", "Mini roundabouts: 2nd gear, yield to right, don't stop unnecessarily"]
+    },
+  {
+    id: "d5", name: "Granitefield & Pearse", centre: "Dún Laoghaire", difficulty: 3, duration: 28, distance: "11.2km",
+    description: "Rochestown Ave → Granitefield → Woodlands Rd → reverse → Pearse area → return",
+    focus: ["reverse around corner", "residential navigation", "mini roundabouts", "observation"],
+    origin:DUN_LAOGHAIRE, dest:DUN_LAOGHAIRE,
+    addressWaypoints: [
+    "Johnstown+Road,+Dun+Laoghaire,+Co+Dublin",
+    "Rochestown+Avenue,+Dun+Laoghaire,+Co+Dublin",
+    "Granitefield,+Dun+Laoghaire,+Co+Dublin",
+    "Pearse+Street,+Sallynoggin,+Co+Dublin"
+    ],
+    waypoints: [
+    { name: "Dún Laoghaire Centre", lat: 53.2842, lng: -6.1533, type: "start" },
+    { name: "Johnstown Road", lat: 53.2850, lng: -6.1555, type: "waypoint" },
+    { name: "Rochestown Avenue", lat: 53.2855, lng: -6.1505, type: "waypoint" },
+    { name: "Granitefield", lat: 53.2848, lng: -6.1495, type: "manoeuvre", note: "Reverse into Auburn Road (past shops)" },
+    { name: "Pearse Street", lat: 53.2835, lng: -6.1470, type: "waypoint" }
+    ],
+    hazards: ["Granitefield reverse spot — slight bend, busy estate", "Parked cars near shops", "Mini roundabouts on approach roads", "Pedestrian crossings on Sallynoggin Road"],
+    tips: ["Auburn Road reverse: watch for cars behind — busy area", "Keep 1m from parked cars at all times", "Granitefield is a common alternative to Watsons for reverse"]
+    },
+  {
+    id: "d6", name: "Stradbrook Extended", centre: "Dún Laoghaire", difficulty: 4, duration: 38, distance: "15.2km",
+    description: "Pottery Rd → Stradbrook roundabout → Deansgrange → Graduate roundabout → full loop",
+    focus: ["roundabouts", "dual carriageway sections", "lane discipline", "endurance"],
+    origin:DUN_LAOGHAIRE, dest:DUN_LAOGHAIRE,
+    addressWaypoints: [
+    "Pottery+Road,+Dun+Laoghaire,+Co+Dublin",
+    "Stradbrook+Road,+Blackrock,+Co+Dublin",
+    "Deansgrange+Road,+Dun+Laoghaire,+Co+Dublin",
+    "Glenageary+Road,+Glenageary,+Co+Dublin",
+    "Sallynoggin+Road,+Dun+Laoghaire,+Co+Dublin"
+    ],
+    waypoints: [
+    { name: "Dún Laoghaire Centre", lat: 53.2842, lng: -6.1533, type: "start" },
+    { name: "Stradbrook Roundabout", lat: 53.2870, lng: -6.1520, type: "hazard", note: "Busy roundabout — lane position" },
+    { name: "Deansgrange Road", lat: 53.2855, lng: -6.1505, type: "waypoint" },
+    { name: "Graduate Roundabout", lat: 53.2835, lng: -6.1490, type: "hazard", note: "Lane discipline critical" },
+    { name: "Glenageary Roundabout", lat: 53.2810, lng: -6.1440, type: "hazard", note: "Third roundabout — stay sharp" }
+    ],
+    hazards: ["Three major roundabouts in one route", "Lane changes between roundabouts", "Speed transitions between zones", "Potential Luas proximity in Deansgrange"],
+    tips: ["Most Dún Laoghaire tests hit at least 2 of these 3 roundabouts", "Plan your lane 100m ahead of each roundabout", "Don't stop at roundabouts unless you must — progress matters"]
+    },
+  {
+    id: "d7", name: "Full Dún Laoghaire Simulation", centre: "Dún Laoghaire", difficulty: 5, duration: 55, distance: "23.6km",
+    description: "Bakers Corner, all 3 roundabouts, Watsons manoeuvres, Sallynoggin. Everything.",
+    focus: ["everything", "endurance", "test simulation"],
+    origin:DUN_LAOGHAIRE, dest:DUN_LAOGHAIRE,
+    addressWaypoints: [
+    "Kill+Avenue,+Dun+Laoghaire,+Co+Dublin",
+    "Monkstown+Farm,+Dun+Laoghaire,+Co+Dublin",
+    "Sallynoggin+Road,+Dun+Laoghaire,+Co+Dublin",
+    "Glenageary+Road,+Glenageary,+Co+Dublin",
+    "Rochestown+Avenue,+Dun+Laoghaire,+Co+Dublin"
+    ],
+    waypoints: [
+    { name: "Dún Laoghaire Centre", lat: 53.2842, lng: -6.1533, type: "start" },
+    { name: "Bakers Corner", lat: 53.2850, lng: -6.1515, type: "hazard", note: "Right turn challenge" },
+    { name: "Monkstown Farm", lat: 53.2870, lng: -6.1480, type: "waypoint" },
+    { name: "Graduate Roundabout", lat: 53.2835, lng: -6.1490, type: "hazard", note: "Lane discipline" },
+    { name: "Glenageary Roundabout", lat: 53.2810, lng: -6.1440, type: "hazard", note: "3rd exit" },
+    { name: "Watsons Estate", lat: 53.2860, lng: -6.1570, type: "manoeuvre", note: "All manoeuvres" }
+    ],
+    hazards: ["Everything combined", "Bakers Corner + 3 roundabouts + manoeuvres", "35+ minutes of sustained concentration", "Tester may vary the pattern"],
+    tips: ["Only after other Dún Laoghaire routes are solid", "Practice at your test time for traffic familiarity", "This is the full package — handle it, handle the test"]
+    },
+  {
+    id: "m1", name: "Tyrrelstown Local", centre: "Mulhuddart", difficulty: 2, duration: 10, distance: "4.6km",
+    description: "Carlton Hotel → Church Rd → Tyrrelstown estates → manoeuvres → return. Confidence builder.",
+    focus: ["residential junctions", "reverse", "turnabout", "speed ramps"],
+    origin:MULHUDDART, dest:MULHUDDART,
+    addressWaypoints: [
+    "Church+Road,+Tyrrelstown,+Dublin+15",
+    "Tyrrelstown+Boulevard,+Tyrrelstown,+Dublin+15",
+    "Tyrrelstown+Way,+Tyrrelstown,+Dublin+15"
+    ],
+    waypoints: [
+    { name: "Mulhuddart Centre", lat: 53.3982, lng: -6.3732, type: "start" },
+    { name: "Church Road", lat: 53.3985, lng: -6.3740, type: "hazard", note: "Stop sign leaving centre — visibility poor" },
+    { name: "Tyrrelstown Boulevard", lat: 53.3990, lng: -6.3720, type: "waypoint" },
+    { name: "Tyrrelstown Way", lat: 53.3995, lng: -6.3710, type: "manoeuvre", note: "Reverse and turnabout" }
+    ],
+    hazards: ["Stop sign 20m from centre exit — can be obscured", "Speed ramps throughout Tyrrelstown", "Narrow residential roads", "Parked cars on bends"],
+    tips: ["STOP at the centre exit — visibility is poor, creep forward", "2nd gear for speed ramps", "Tyrrelstown estates are the gentle introduction — master these first"]
+    },
+  {
+    id: "m2", name: "Huntstown Estate", centre: "Mulhuddart", difficulty: 3, duration: 19, distance: "7.4km",
+    description: "Tyrrelstown → Huntstown → large speed ramps → narrow roads → manoeuvres → return",
+    focus: ["speed ramps", "narrow roads", "hazard awareness", "reverse on bend"],
+    origin:MULHUDDART, dest:MULHUDDART,
+    addressWaypoints: [
+    "Church+Road,+Tyrrelstown,+Dublin+15",
+    "Huntstown+Road,+Mulhuddart,+Dublin+15",
+    "Huntstown+Way,+Mulhuddart,+Dublin+15",
+    "Huntstown+Drive,+Mulhuddart,+Dublin+15"
+    ],
+    waypoints: [
+    { name: "Mulhuddart Centre", lat: 53.3982, lng: -6.3732, type: "start" },
+    { name: "Huntstown Road", lat: 53.3960, lng: -6.3710, type: "waypoint" },
+    { name: "Huntstown Way", lat: 53.3950, lng: -6.3700, type: "hazard", note: "Large speed ramps — 2nd gear" },
+    { name: "Huntstown Drive", lat: 53.3945, lng: -6.3695, type: "manoeuvre", note: "Reverse on slight bend — tricky" }
+    ],
+    hazards: ["Massive speed ramps — hitting these fast = Grade 2", "Very narrow estate roads — position on bends critical", "Give way if hazard is on your side", "Reverse spot is on a slight bend with estate traffic"],
+    tips: ["2nd gear, 20km/h for the big ramps — brake gently before, accelerate after", "On narrow roads: if hazard is your side, you yield", "Reverse on bend: extra mirror checks, go very slowly"]
+    },
+  {
+    id: "m3", name: "N3 National Road", centre: "Mulhuddart", difficulty: 4, duration: 16, distance: "8.0km",
+    description: "Church Rd → N3 merge → 100km/h → exit → Mulhuddart Village → return. #1 fail zone.",
+    focus: ["dual carriageway merge", "speed management", "lane changes", "right turn"],
+    origin:MULHUDDART, dest:MULHUDDART,
+    addressWaypoints: [
+    "Church+Road,+Tyrrelstown,+Dublin+15",
+    "N3+Navan+Road,+Mulhuddart,+Dublin+15",
+    "Mulhuddart+Village,+Mulhuddart,+Dublin+15",
+    "Old+Navan+Road,+Mulhuddart,+Dublin+15"
+    ],
+    waypoints: [
+    { name: "Mulhuddart Centre", lat: 53.3982, lng: -6.3732, type: "start" },
+    { name: "N3 Merge", lat: 53.3950, lng: -6.3680, type: "hazard", note: "100km/h merge — build speed on slip road" },
+    { name: "N3 National Road", lat: 53.3940, lng: -6.3650, type: "hazard", note: "100km/h — must reach speed limit" },
+    { name: "Mulhuddart Village", lat: 53.3920, lng: -6.3600, type: "waypoint" },
+    { name: "Right turn onto N3", lat: 53.3930, lng: -6.3620, type: "hazard", note: "#1 FAIL — one-way road, stay in right lane" }
+    ],
+    hazards: ["N3 merge at 100km/h — daunting but required", "Must reach 100km/h if safe — going too slow gets marked", "Right turn back onto N3 — it's a one-way street", "Wrong lane at N3 return = can't turn right = fail"],
+    tips: ["Build speed on the slip road — don't join at 60km/h", "Merge at first safe gap — hesitation is worse than waiting", "For N3 return right turn: check road markings, stay in RIGHT lane", "If you don't know it's one-way, you'll end up stuck in the left lane"]
+    },
+  {
+    id: "m4", name: "Blanchardstown Roundabout", centre: "Mulhuddart", difficulty: 4, duration: 21, distance: "8.1km",
+    description: "N3 → Blanchardstown Shopping Centre roundabout → Corduff → return",
+    focus: ["major roundabout", "lane discipline", "traffic volume", "observation"],
+    origin:MULHUDDART, dest:MULHUDDART,
+    addressWaypoints: [
+    "Church+Road,+Tyrrelstown,+Dublin+15",
+    "N3+Navan+Road,+Mulhuddart,+Dublin+15",
+    "Blanchardstown+Shopping+Centre,+Dublin+15",
+    "Corduff+Road,+Blanchardstown,+Dublin+15"
+    ],
+    waypoints: [
+    { name: "Mulhuddart Centre", lat: 53.3982, lng: -6.3732, type: "start" },
+    { name: "N3", lat: 53.3950, lng: -6.3680, type: "waypoint" },
+    { name: "Blanchardstown Roundabout", lat: 53.3920, lng: -6.3560, type: "hazard", note: "Extremely busy — lane position critical" },
+    { name: "Corduff Road", lat: 53.3930, lng: -6.3580, type: "waypoint" }
+    ],
+    hazards: ["Blanchardstown roundabout — extremely busy, multi-lane", "Lane selection before roundabout determines your exit", "Shopping centre traffic — unpredictable", "Bus lanes on approach roads — check markings"],
+    tips: ["Know your exit BEFORE entering the roundabout", "Follow road markings painted on the surface", "Don't panic at volume — commit to your lane and proceed", "Practice this roundabout multiple times with your instructor"]
+    },
+  {
+    id: "m5", name: "Mulhuddart Village & Industrial", centre: "Mulhuddart", difficulty: 3, duration: 21, distance: "13.3km",
+    description: "Tyrrelstown → Mulhuddart Village → industrial estate → bus lane areas → return",
+    focus: ["bus lanes", "industrial roads", "road markings", "lane merges"],
+    origin:MULHUDDART, dest:MULHUDDART,
+    addressWaypoints: [
+    "Church+Road,+Tyrrelstown,+Dublin+15",
+    "Mulhuddart+Village,+Mulhuddart,+Dublin+15",
+    "Old+Navan+Road,+Mulhuddart,+Dublin+15",
+    "Damastown+Road,+Mulhuddart,+Dublin+15"
+    ],
+    waypoints: [
+    { name: "Mulhuddart Centre", lat: 53.3982, lng: -6.3732, type: "start" },
+    { name: "Mulhuddart Village", lat: 53.3920, lng: -6.3600, type: "waypoint" },
+    { name: "Old Navan Road", lat: 53.3925, lng: -6.3610, type: "hazard", note: "Bus lane merges — complicated" },
+    { name: "Damastown Road", lat: 53.3935, lng: -6.3640, type: "waypoint" }
+    ],
+    hazards: ["Bus lane merges — two lanes becoming one", "Road marking observation critical in this area", "Industrial estate traffic — HGVs possible", "Speed limit transitions"],
+    tips: ["Watch for bus lane markings — don't drive in active bus lanes", "When lanes merge: check mirrors, signal, merge smoothly", "Industrial roads can be wide but stay in lane", "This area has many complicated road marking layouts"]
+    },
+  {
+    id: "m6", name: "Hartstown Extension", centre: "Mulhuddart", difficulty: 3, duration: 29, distance: "12.5km",
+    description: "Tyrrelstown → Hartstown → Clonsilla area → residential manoeuvres → return",
+    focus: ["residential estates", "roundabouts", "speed management", "manoeuvres"],
+    origin:MULHUDDART, dest:MULHUDDART,
+    addressWaypoints: [
+    "Church+Road,+Tyrrelstown,+Dublin+15",
+    "Hartstown+Road,+Hartstown,+Dublin+15",
+    "Clonsilla+Road,+Clonsilla,+Dublin+15",
+    "Hartstown+Avenue,+Hartstown,+Dublin+15"
+    ],
+    waypoints: [
+    { name: "Mulhuddart Centre", lat: 53.3982, lng: -6.3732, type: "start" },
+    { name: "Hartstown Road", lat: 53.3940, lng: -6.3750, type: "waypoint" },
+    { name: "Clonsilla Road", lat: 53.3920, lng: -6.3770, type: "waypoint" },
+    { name: "Hartstown Avenue", lat: 53.3935, lng: -6.3755, type: "manoeuvre", note: "Reverse and turnabout" }
+    ],
+    hazards: ["Roundabouts on Hartstown Road", "Speed ramps in residential areas", "School zones — Hartstown has several", "Pedestrians near shopping areas"],
+    tips: ["Hartstown is quieter than Huntstown — good for building skills", "School zones: be extra alert 8:30-9:30am and 2:30-3:30pm", "Mini roundabouts: 2nd gear, yield right"]
+    },
+  {
+    id: "m7", name: "Full Mulhuddart Simulation", centre: "Mulhuddart", difficulty: 5, duration: 39, distance: "17.8km",
+    description: "N3 at 100km/h, Blanchardstown roundabout, Huntstown manoeuvres, village. Everything.",
+    focus: ["everything", "endurance", "test simulation"],
+    origin:MULHUDDART, dest:MULHUDDART,
+    addressWaypoints: [
+    "Church+Road,+Tyrrelstown,+Dublin+15",
+    "N3+Navan+Road,+Mulhuddart,+Dublin+15",
+    "Blanchardstown+Shopping+Centre,+Dublin+15",
+    "Mulhuddart+Village,+Mulhuddart,+Dublin+15",
+    "Huntstown+Road,+Mulhuddart,+Dublin+15"
+    ],
+    waypoints: [
+    { name: "Mulhuddart Centre", lat: 53.3982, lng: -6.3732, type: "start" },
+    { name: "N3 Merge", lat: 53.3950, lng: -6.3680, type: "hazard", note: "100km/h merge" },
+    { name: "Blanchardstown", lat: 53.3920, lng: -6.3560, type: "hazard", note: "Major roundabout" },
+    { name: "Mulhuddart Village", lat: 53.3920, lng: -6.3600, type: "waypoint" },
+    { name: "N3 Return", lat: 53.3930, lng: -6.3620, type: "hazard", note: "Right turn — right lane only" },
+    { name: "Huntstown", lat: 53.3950, lng: -6.3700, type: "manoeuvre", note: "All manoeuvres" }
+    ],
+    hazards: ["Everything combined — N3, roundabout, village, estates", "40 minutes with 100km/h section", "Fatigue after high-speed merge", "Tester may vary the sequence"],
+    tips: ["Only attempt after other Mulhuddart routes are solid", "The N3 + Blanchardstown roundabout combo is the test's spine", "If you nail this, test day is familiar territory"]
+    }
 ];
 
 const DL={1:"Starter",2:"Developing",3:"Intermediate",4:"Challenging",5:"Test Ready"};
@@ -109,39 +930,137 @@ const TARGET_HOURS=45;
 function buildMapsUrl(r){return `https://www.google.com/maps/dir/?api=1&origin=${r.origin}&destination=${r.dest}&waypoints=${encodeURIComponent(r.addressWaypoints.join("|"))}&travelmode=driving`;}
 function ls(k,v){if(v===undefined){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null}catch{return null}}else{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}}
 
-function generatePlan(testDate){
+
+function getRoutesForCentre(centre){
+  if(!centre)return ROUTES;
+  if(centre==="Raheny"||centre==="Killester") return ROUTES.filter(r=>r.centre==="Raheny"||r.centre==="Killester");
+  return ROUTES.filter(r=>r.centre===centre);
+}
+
+function generatePlan(testDate,centre,hoursDriven=0,focusPts=[],sched={wd:{spd:1,len:60},we:{spd:2,len:90}},avDays=[1,2,3,4,5],overrides={}){
   const today=new Date();today.setHours(0,0,0,0);
   const target=new Date(testDate);target.setHours(0,0,0,0);
   const totalDays=Math.max(0,Math.round((target-today)/86400000));
-  if(totalDays<=0)return[];
-  const sorted=[...ROUTES].sort((a,b)=>a.difficulty-b.difficulty);
-  const phases=[{name:"Foundation",pct:.25,maxDiff:2,sessionMin:60},{name:"Building",pct:.25,maxDiff:3,sessionMin:75},{name:"Intensity",pct:.25,maxDiff:4,sessionMin:90},{name:"Final Prep",pct:.25,maxDiff:5,sessionMin:120}];
-  const plan=[];let di=0,cumHrs=0;
-  for(const ph of phases){
-    const pd=Math.max(2,Math.round(totalDays*ph.pct));
-    const available=sorted.filter(r=>r.difficulty<=ph.maxDiff);
-    const ceiling=sorted.filter(r=>r.difficulty===ph.maxDiff);
-    const pool=[];for(let i=0;i<pd*2;i++){if(i%5<3&&ceiling.length)pool.push(ceiling[i%ceiling.length]);else pool.push(available[i%available.length]);}
-    let pi=0;
-    for(let d=0;d<pd&&di<totalDays;d++){
+  if(totalDays<=0)return{plan:[],mode:null,meta:{}};
+  const pool=getRoutesForCentre(centre);
+  // Weight by focus overlap — routes matching user weaknesses rise to the top within their difficulty band
+  const sorted=[...pool].sort((a,b)=>{
+    const dd=a.difficulty-b.difficulty;
+    if(dd!==0)return dd;
+    return routeFocusScore(b,focusPts)-routeFocusScore(a,focusPts);
+  });
+  if(sorted.length===0)return{plan:[],mode:null,meta:{}};
+
+  // ── Per-day config helper ──────────────────────────────────
+  const isWeekend=dow=>dow===0||dow===6;
+  const dayConfig=dow=>isWeekend(dow)?sched.we:sched.wd;
+  const fmtKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const isDayAvail=(date)=>{const key=fmtKey(date);if(key in overrides)return overrides[key];return daysSet.has(date.getDay());};
+  const wdCap=(sched.wd.spd*sched.wd.len)/60;
+  const weCap=(sched.we.spd*sched.we.len)/60;
+
+  // ── Mode determination ─────────────────────────────────────
+  const hoursNeeded=Math.max(0,TARGET_HOURS-(hoursDriven||0));
+  const daysSet=new Set(avDays.length?avDays:[1,2,3,4,5]);
+  let practiceDays=0,weeklyCapacity=0;
+  for(let i=0;i<totalDays;i++){const d=new Date(today);d.setDate(d.getDate()+i);if(isDayAvail(d))practiceDays++;}
+  practiceDays=practiceDays||1;
+  // Compute actual weekly capacity from schedule
+  [1,2,3,4,5].forEach(d=>{if(daysSet.has(d))weeklyCapacity+=wdCap;});
+  [0,6].forEach(d=>{if(daysSet.has(d))weeklyCapacity+=weCap;});
+  const weeksInPlan=totalDays/7;
+  const totalCapacity=weeklyCapacity*weeksInPlan;
+  const avgDailyNeeded=hoursNeeded/practiceDays;
+  const avgDailyCapacity=totalCapacity/practiceDays||1;
+  const dailyNeeded=Math.round(avgDailyNeeded*10)/10;
+
+  let mode;
+  if(hoursNeeded<=totalCapacity*0.5) mode="consolidation";
+  else if(hoursNeeded<=totalCapacity) mode="catchup";
+  else mode="redzone";
+
+  // Recommended postpone date for red zone
+  const daysPerWeek=daysSet.size||5;
+  const sustainableWeekly=weeklyCapacity*0.7; // 70% of max capacity is sustainable
+  const weeksNeeded=hoursNeeded/(sustainableWeekly||1);
+  const recommendedDate=new Date(today);
+  recommendedDate.setDate(recommendedDate.getDate()+Math.ceil(weeksNeeded*7)+7);
+  const projectedHrs=(hoursDriven||0)+Math.min(totalCapacity,hoursNeeded);
+
+  const meta={mode,hoursNeeded:Math.round(hoursNeeded*10)/10,dailyNeeded,practiceDays,recommendedDate,projectedHrs:Math.round(projectedHrs*10)/10,hoursDriven:hoursDriven||0,weeklyCapacity:Math.round(weeklyCapacity*10)/10};
+
+  // ── Plan generation ────────────────────────────────────────
+  const plan=[];let di=0,cumHrs=hoursDriven||0;
+
+  const SLOT_LABELS=["Morning","Afternoon","Evening"];
+  const getDaySess=(dow)=>{const c=dayConfig(dow);return{mins:c.len||60,count:c.spd||1};};
+
+  if(mode==="consolidation"){
+    const phases=[
+      {name:"Route Familiarity",pct:.5,minDiff:3,maxDiff:4},
+      {name:"Test Simulation",pct:.5,minDiff:4,maxDiff:5}
+    ];
+    for(const ph of phases){
+      const pd=Math.max(2,Math.round(totalDays*ph.pct));
+      const available=sorted.filter(r=>r.difficulty>=ph.minDiff&&r.difficulty<=ph.maxDiff);
+      const fallback=available.length?available:sorted.filter(r=>r.difficulty<=ph.maxDiff);
+      const routePool=fallback.length?fallback:sorted;
+      let pi=0;
+      for(let d=0;d<pd&&di<totalDays;d++){
+        const date=new Date(today);date.setDate(date.getDate()+di);const dow=date.getDay();
+        const isAvail=isDayAvail(date);
+        if(!isAvail){plan.push({date:new Date(date),phase:ph.name,type:"rest",route:null,slot:null,focus:null,dq:DAY_Q[dow],sessDur:0,cumHrs:Math.round(cumHrs*10)/10});}
+        else{const ds=getDaySess(dow);for(let s=0;s<ds.count;s++){const route=routePool[pi%routePool.length];pi++;cumHrs+=ds.mins/60;plan.push({date:new Date(date),phase:ph.name,type:"practice",route,slot:SLOT_LABELS[s]||SLOT_LABELS[0],focus:route.focus.slice(0,2),dq:DAY_Q[dow],sessDur:ds.mins,cumHrs:Math.round(cumHrs*10)/10,sessionNum:s+1,sessionsTotal:ds.count});}}
+        di++;
+      }
+    }
+  } else if(mode==="catchup"){
+    const phases=[
+      {name:"Accelerated Foundation",pct:.15,maxDiff:2},
+      {name:"Skill Building",pct:.25,maxDiff:3},
+      {name:"Intensity",pct:.30,maxDiff:4},
+      {name:"Final Prep",pct:.30,maxDiff:5}
+    ];
+    for(const ph of phases){
+      const pd=Math.max(1,Math.round(totalDays*ph.pct));
+      const available=sorted.filter(r=>r.difficulty<=ph.maxDiff);
+      const ceiling=sorted.filter(r=>r.difficulty===ph.maxDiff);
+      const routePool=[];for(let i=0;i<pd*3*2;i++){if(i%4<2&&ceiling.length)routePool.push(ceiling[i%ceiling.length]);else routePool.push(available[i%available.length]);}
+      let pi=0;
+      for(let d=0;d<pd&&di<totalDays;d++){
+        const date=new Date(today);date.setDate(date.getDate()+di);const dow=date.getDay();
+        const isAvail2=isDayAvail(date);
+        if(!isAvail2){plan.push({date:new Date(date),phase:ph.name,type:"rest",route:null,slot:null,focus:null,dq:DAY_Q[dow],sessDur:0,cumHrs:Math.round(cumHrs*10)/10});}
+        else{const ds=getDaySess(dow);for(let s=0;s<ds.count;s++){const route=routePool[pi%routePool.length];pi++;cumHrs+=ds.mins/60;plan.push({date:new Date(date),phase:ph.name,type:"practice",route,slot:SLOT_LABELS[s]||SLOT_LABELS[0],focus:route.focus.slice(0,2),dq:DAY_Q[dow],sessDur:ds.mins,cumHrs:Math.round(cumHrs*10)/10,sessionNum:s+1,sessionsTotal:ds.count});}}
+        di++;
+      }
+    }
+  } else {
+    const hard=sorted.filter(r=>r.difficulty>=3);
+    const hardPool=hard.length?hard:sorted;
+    let hi=0;
+    for(let d=0;d<totalDays&&di<totalDays;d++){
       const date=new Date(today);date.setDate(date.getDate()+di);const dow=date.getDay();
-      const isRest=dow===5&&(ph.name==="Foundation"||ph.name==="Building");
-      if(isRest){plan.push({date:new Date(date),phase:ph.name,type:"rest",route:null,slot:null,focus:null,dq:DAY_Q[dow],sessDur:0,cumHrs});}
-      else{const route=pool[pi%pool.length];pi++;cumHrs+=ph.sessionMin/60;plan.push({date:new Date(date),phase:ph.name,type:"practice",route,slot:dow===0?SLOTS[1]:SLOTS[0],focus:route.focus.slice(0,2),dq:DAY_Q[dow],sessDur:ph.sessionMin,cumHrs:Math.round(cumHrs*10)/10});}
+      if(!isDayAvail(date)){plan.push({date:new Date(date),phase:"Emergency Prep",type:"rest",route:null,slot:null,focus:null,dq:DAY_Q[dow],sessDur:0,cumHrs:Math.round(cumHrs*10)/10});}
+      else{for(let s=0;s<getDaySess(dow).count;s++){const ds=getDaySess(dow);const route=hardPool[hi%hardPool.length];hi++;cumHrs+=ds.mins/60;plan.push({date:new Date(date),phase:"Emergency Prep",type:"practice",route,slot:SLOT_LABELS[s]||SLOT_LABELS[0],focus:d<3?["#1 fail location",route.focus[0]]:route.focus.slice(0,2),dq:DAY_Q[dow],sessDur:ds.mins,cumHrs:Math.round(cumHrs*10)/10,sessionNum:s+1,sessionsTotal:ds.count});}}
       di++;
     }
   }
-  const hard=sorted.filter(r=>r.difficulty>=4);
-  while(di<totalDays){const date=new Date(today);date.setDate(date.getDate()+di);const route=hard[di%hard.length]||sorted[sorted.length-1];cumHrs+=2;plan.push({date:new Date(date),phase:"Final Prep",type:"practice",route,slot:SLOTS[0],focus:["test sim"],dq:DAY_Q[date.getDay()],sessDur:120,cumHrs:Math.round(cumHrs*10)/10});di++;}
-  plan.push({date:new Date(target),phase:"Test Day",type:"test",route:null,slot:null,focus:["breathe"],dq:5,sessDur:0,cumHrs});
-  return plan;
+
+  // Fill any remaining days
+  const fillHard=sorted.filter(r=>r.difficulty>=4);
+  const fillPool=fillHard.length?fillHard:[sorted[sorted.length-1]];
+  let fi=0;
+  while(di<totalDays){const date=new Date(today);date.setDate(date.getDate()+di);const dow=date.getDay();if(!isDayAvail(date)){plan.push({date:new Date(date),phase:mode==="redzone"?"Emergency Prep":"Final Prep",type:"rest",route:null,slot:null,focus:null,dq:DAY_Q[dow],sessDur:0,cumHrs:Math.round(cumHrs*10)/10});}else{const ds=getDaySess(dow);for(let s=0;s<ds.count;s++){const route=fillPool[fi%fillPool.length];fi++;cumHrs+=ds.mins/60;plan.push({date:new Date(date),phase:mode==="redzone"?"Emergency Prep":"Final Prep",type:"practice",route,slot:SLOT_LABELS[s]||SLOT_LABELS[0],focus:["test sim"],dq:DAY_Q[dow],sessDur:ds.mins,cumHrs:Math.round(cumHrs*10)/10,sessionNum:s+1,sessionsTotal:ds.count});}}di++;}
+  plan.push({date:new Date(target),phase:"Test Day",type:"test",route:null,slot:null,focus:["breathe"],dq:5,sessDur:0,cumHrs:Math.round(cumHrs*10)/10});
+  return{plan,mode,meta};
 }
 
 const fmt=d=>d.toLocaleDateString("en-IE",{weekday:"short",day:"numeric",month:"short"});
 const fmtShort=d=>d.toLocaleDateString("en-IE",{day:"numeric",month:"short"});
 const isToday=d=>{const t=new Date();t.setHours(0,0,0,0);const c=new Date(d);c.setHours(0,0,0,0);return c.getTime()===t.getTime();};
 const isPast=d=>{const t=new Date();t.setHours(0,0,0,0);const c=new Date(d);c.setHours(0,0,0,0);return c<t;};
-const PC=p=>({"Foundation":"#22C55E","Building":"#F59E0B","Intensity":"#F97316","Final Prep":"#EF4444","Test Day":"#0EA5E9"}[p]||"#94A3B8");
+const PC=p=>({"Foundation":"#22C55E","Accelerated Foundation":"#22C55E","Building":"#F59E0B","Skill Building":"#F59E0B","Route Familiarity":"#0EA5E9","Intensity":"#F97316","Final Prep":"#EF4444","Test Simulation":"#8B5CF6","Emergency Prep":"#EF4444","Test Day":"#0EA5E9"}[p]||"#94A3B8");
 
 // ─── MINI MAP ──────────────────────────────────────────────────────────
 const MiniMap=({wps,sz=120})=>{
@@ -185,14 +1104,43 @@ function Drive(){
   const[progress,setProgress]=useState(()=>ls("drv-prog")||{});
   const[expDay,setExpDay]=useState(null);
   const[expRoute,setExpRoute]=useState(null);
+  const[hoursDriven,setHoursDriven]=useState(()=>ls("drv-hours")||0);
+  const[focusPoints,setFocusPoints]=useState(()=>ls("drv-focus")||[]);
+  const[preset,setPreset]=useState(()=>ls("drv-preset")||"steady");
+  const[availDays,setAvailDays]=useState(()=>ls("drv-days")||[1,2,3,4,5,6]);
+  const[schedule,setSchedule]=useState(()=>ls("drv-sched")||{wd:{spd:1,len:60},we:{spd:2,len:90}});
+  const[dayOverrides,setDayOverrides]=useState(()=>ls("drv-overrides")||{});
   const[dateInput,setDateInput]=useState(()=>ls("drv-date")||"");
+  const[hoursInput,setHoursInput]=useState(()=>{const v=ls("drv-hours");return v?String(v):"";});
+  const[focusInput,setFocusInput]=useState(()=>ls("drv-focus")||[]);
+  const[presetInput,setPresetInput]=useState(()=>ls("drv-preset")||"steady");
+  const[daysInput,setDaysInput]=useState(()=>ls("drv-days")||[1,2,3,4,5,6]);
+  const[schedInput,setSchedInput]=useState(()=>ls("drv-sched")||{wd:{spd:1,len:60},we:{spd:2,len:90}});
+  const updSched=(cat,key,val)=>setSchedInput(prev=>({...prev,[cat]:{...prev[cat],[key]:val}}));
+  const applyPreset=(pid)=>{setPresetInput(pid);if(pid!=="custom"){const p=PRESETS[pid];setDaysInput(p.days);setSchedInput({wd:p.wd,we:p.we});}};
   const[showSetup,setShowSetup]=useState(false);
+  const[routeFilter,setRouteFilter]=useState(null);
+  const[showRunLog,setShowRunLog]=useState(false);
+  const[toast,setToast]=useState(null);
+  const toastTimer=useRef(null);
+  const showToast=(msg,undoFn)=>{if(toastTimer.current)clearTimeout(toastTimer.current);setToast({msg,undoFn,leaving:false});toastTimer.current=setTimeout(()=>{setToast(t=>t?{...t,leaving:true}:null);setTimeout(()=>setToast(null),250);},4000);};
 
-  const apply=()=>{if(dateInput){setTestDate(dateInput);ls("drv-date",dateInput);}if(centre)ls("drv-centre",centre);setShowSetup(false);};
-  const logRun=(rid,mins)=>{const np={...progress,[rid]:{runs:(progress[rid]?.runs||0)+1,mins:(progress[rid]?.mins||0)+(mins||0),last:new Date().toLocaleDateString("en-IE")}};setProgress(np);ls("drv-prog",np);};
-  const reset=()=>{setProgress({});setTestDate(null);setCentre(null);setDateInput("");localStorage.removeItem("drv-date");localStorage.removeItem("drv-centre");localStorage.removeItem("drv-prog");};
+  const apply=()=>{if(dateInput){setTestDate(dateInput);ls("drv-date",dateInput);}if(centre)ls("drv-centre",centre);const hrs=Math.max(0,Number(hoursInput)||0);setHoursDriven(hrs);ls("drv-hours",hrs);setFocusPoints(focusInput);ls("drv-focus",focusInput);setPreset(presetInput);ls("drv-preset",presetInput);setAvailDays(daysInput);ls("drv-days",daysInput);setSchedule(schedInput);ls("drv-sched",schedInput);setShowSetup(false);};
+  const toggleDay=(dateStr,currentlyRest)=>{
+    const newOv={...dayOverrides};
+    if(dateStr in newOv){delete newOv[dateStr];} // already overridden → revert to default
+    else{newOv[dateStr]=currentlyRest;} // override: rest→practice or practice→rest
+    setDayOverrides(newOv);ls("drv-overrides",newOv);
+  };
+  const fmtDateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
-  const plan=useMemo(()=>testDate?generatePlan(testDate):[],[testDate]);
+  const logRun=(rid,mins)=>{const prev={...progress};const np={...progress,[rid]:{runs:(progress[rid]?.runs||0)+1,mins:(progress[rid]?.mins||0)+(mins||0),last:new Date().toLocaleDateString("en-IE")}};setProgress(np);ls("drv-prog",np);showToast(`Logged ${mins}min on ${ROUTES.find(r=>r.id===rid)?.name||rid}`,()=>{setProgress(prev);ls("drv-prog",prev);});};
+  const reset=()=>{setProgress({});setTestDate(null);setCentre(null);setDateInput("");setHoursDriven(0);setHoursInput("");setFocusPoints([]);setFocusInput([]);setPreset("steady");setPresetInput("steady");setAvailDays([1,2,3,4,5,6]);setDaysInput([1,2,3,4,5,6]);setSchedule({wd:{spd:1,len:60},we:{spd:2,len:90}});setSchedInput({wd:{spd:1,len:60},we:{spd:2,len:90}});setDayOverrides({});setRouteFilter(null);["drv-date","drv-centre","drv-prog","drv-hours","drv-focus","drv-preset","drv-days","drv-sched","drv-overrides"].forEach(k=>localStorage.removeItem(k))};
+
+  const planResult=useMemo(()=>testDate?generatePlan(testDate,centre,hoursDriven,focusPoints,schedule,availDays,dayOverrides):{plan:[],mode:null,meta:{}},[testDate,centre,hoursDriven,focusPoints,schedule,availDays,dayOverrides]);
+  const plan=planResult.plan;
+  const planMode=planResult.mode;
+  const planMeta=planResult.meta;
   const daysLeft=useMemo(()=>{if(!testDate)return null;const n=new Date();n.setHours(0,0,0,0);const t=new Date(testDate);t.setHours(0,0,0,0);return Math.max(0,Math.round((t-n)/86400000));},[testDate]);
   const loggedMins=Object.values(progress).reduce((s,p)=>s+(p.mins||0),0);
   const loggedHrs=Math.round(loggedMins/6)/10;
@@ -201,6 +1149,17 @@ function Drive(){
   const curPhase=todayEntry?.phase||(plan.length?plan.find(p=>!isPast(p.date))?.phase:null);
   const planHrs=plan.length?plan[plan.length-1].cumHrs||0:0;
   const needsSetup=!testDate;
+
+  const filteredRoutes=useMemo(()=>{
+    if(!routeFilter)return ROUTES;
+    if(routeFilter==="Raheny"||routeFilter==="Killester")return ROUTES.filter(r=>r.centre==="Raheny"||r.centre==="Killester");
+    return ROUTES.filter(r=>r.centre===routeFilter);
+  },[routeFilter]);
+
+  const uniqueCentres=useMemo(()=>{
+    const seen=new Set();
+    return ROUTES.map(r=>r.centre).filter(c=>{if(seen.has(c))return false;seen.add(c);return true;});
+  },[]);
 
   // ─── SETUP MODAL ───────────────────────────────────────────────────
   // SetupModal inlined to prevent re-mount on state change
@@ -238,21 +1197,121 @@ function Drive(){
     </Card>);
   };
 
+  // ─── JOURNEY BAR ────────────────────────────────────────────
+  const JourneyBar=()=>{
+    if(!plan.length)return null;
+    const phases=[];const seen=new Set();
+    plan.forEach(d=>{if(d.phase&&!seen.has(d.phase)&&d.phase!=="Test Day"){seen.add(d.phase);phases.push(d.phase);}});
+    if(!phases.length)return null;
+    const todayIdx=plan.findIndex(p=>isToday(p.date));
+    const firstNotPast=plan.findIndex(p=>!isPast(p.date));
+    const currentIdx=todayIdx>=0?todayIdx:(firstNotPast>=0?firstNotPast:0);
+    const currentPhase=plan[currentIdx]?.phase;
+    const activePhaseIdx=phases.indexOf(currentPhase);
+    const totalPracticeDays=plan.filter(d=>d.type==="practice").length;
+    const completedDays=plan.filter(d=>d.type==="practice"&&isPast(d.date)&&!isToday(d.date)).length;
+    const pct=totalPracticeDays?Math.round(completedDays/totalPracticeDays*100):0;
+    return(<Card className="fade-up" style={{marginBottom:"12px",padding:"14px 16px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}}>
+        <span style={{fontSize:"13px",fontWeight:700,color:"#1A1A1A"}}>Your Learning Path</span>
+        <span style={{fontSize:"11px",color:"#94A3B8",fontWeight:500}}>{pct}% through plan</span>
+      </div>
+      <div style={{display:"flex",gap:"3px",marginBottom:"8px"}}>
+        {phases.map((ph,i)=>{
+          const isCurrent=i===activePhaseIdx;
+          const isDone=i<activePhaseIdx;
+          return(<div key={ph} style={{flex:1,height:"6px",borderRadius:"3px",background:isDone?PC(ph):isCurrent?PC(ph):"#E2E8F0",opacity:isDone?0.4:1,position:"relative",transition:"all .3s"}}>
+            {isCurrent&&<div style={{position:"absolute",top:"-3px",right:"-1px",width:"12px",height:"12px",borderRadius:"50%",background:PC(ph),border:"2.5px solid #fff",boxShadow:"0 1px 4px rgba(0,0,0,.15)"}}/>}
+          </div>);
+        })}
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between"}}>
+        {phases.map((ph,i)=>{
+          const isCurrent=i===activePhaseIdx;
+          return(<span key={ph} style={{fontSize:"9px",fontWeight:isCurrent?700:500,color:isCurrent?PC(ph):"#CBD5E1",flex:1,textAlign:i===0?"left":i===phases.length-1?"right":"center"}}>{ph}</span>);
+        })}
+      </div>
+    </Card>);
+  };
+
+  // ─── PLAN BANNER ─────────────────────────────────────────────
+  const PlanBanner=()=>{
+    const [dismissed,setDismissed]=useState(false);
+    if(dismissed)return null;
+    const m=planMeta;
+    const modeConfig={
+      consolidation:{bg:"#F0FDF4",border:"#BBF7D0",color:"#15803D",icon:"✅",title:"On Track",desc:`${m.hoursDriven}h banked — you're ahead of schedule. This plan focuses on route familiarity and test simulation.`},
+      catchup:{bg:"#FFFBEB",border:"#FDE68A",color:"#92400E",icon:"⚡",title:"Catch-Up Mode",desc:`You need ~${m.dailyNeeded}h per practice day to hit ${TARGET_HOURS}h by test day. Your schedule gives you ${m.weeklyCapacity}h/week capacity. Phases are compressed to make it work.`},
+      redzone:{bg:"#FFF5F5",border:"#FECACA",color:"#991B1B",icon:"⚠️",title:"Not Enough Time",desc:`At ${m.hoursDriven||0}h banked with ${daysLeft} days to go, you need ${m.hoursNeeded}h more but your schedule only covers ${m.weeklyCapacity}h/week.`}
+    };
+    const cfg=modeConfig[planMode];
+    if(!cfg)return null;
+    const fmtDate=d=>d.toLocaleDateString("en-IE",{day:"numeric",month:"short",year:"numeric"});
+    return(<Card className="fade-up" style={{marginBottom:"12px",padding:"14px 16px",background:cfg.bg,border:`1.5px solid ${cfg.border}`,position:"relative"}}>
+      <button onClick={()=>setDismissed(true)} style={{position:"absolute",top:"10px",right:"12px",background:"none",border:"none",fontSize:"16px",color:cfg.color,opacity:.4,cursor:"pointer",padding:"4px"}}>×</button>
+      <div style={{display:"flex",gap:"10px",alignItems:"flex-start"}}>
+        <span style={{fontSize:"18px",flexShrink:0,marginTop:"1px"}}>{cfg.icon}</span>
+        <div>
+          <div style={{fontSize:"14px",fontWeight:700,color:cfg.color,marginBottom:"4px"}}>{cfg.title}</div>
+          <p style={{fontSize:"12px",color:cfg.color,opacity:.8,lineHeight:1.5,margin:0}}>{cfg.desc}</p>
+          {planMode==="redzone"&&<div style={{marginTop:"10px",padding:"10px 12px",background:"rgba(255,255,255,.6)",borderRadius:"10px"}}>
+            <p style={{fontSize:"12px",fontWeight:600,color:cfg.color,margin:"0 0 4px"}}>Consider rescheduling to {fmtDate(m.recommendedDate)}</p>
+            <p style={{fontSize:"11px",color:cfg.color,opacity:.7,margin:0,lineHeight:1.5}}>That gives you time at a sustainable pace on your practice days. Below is the best plan for the time you have.</p>
+          </div>}
+          {planMode==="catchup"&&<p style={{fontSize:"11px",color:cfg.color,opacity:.6,margin:"8px 0 0",lineHeight:1.4}}>At 90min/day you'll reach ~{Math.round((m.hoursDriven+(m.practiceDays*1.5))*10)/10}h by test day.</p>}
+        </div>
+      </div>
+    </Card>);
+  };
+
   // ─── STATS ROW ────────────────────────────────────────────────────
-  const Stats=()=>(<div className="fade-up" style={{display:"flex",gap:"8px",marginBottom:"12px",animationDelay:".05s"}}>
+  const removeRun=(rid)=>{
+    const p=progress[rid];if(!p||p.runs<=0)return;
+    const prev={...progress};
+    const avgMins=p.runs>0?p.mins/p.runs:0;
+    const np={...progress,[rid]:{...p,runs:p.runs-1,mins:Math.max(0,p.mins-avgMins)}};
+    if(np[rid].runs<=0)delete np[rid];
+    setProgress(np);ls("drv-prog",np);
+    showToast(`Removed 1 run from ${ROUTES.find(r=>r.id===rid)?.name||rid}`,()=>{setProgress(prev);ls("drv-prog",prev);});
+  };
+
+  const Stats=()=>{
+    const modeLabel={consolidation:"On Track",catchup:"Catch-Up",redzone:"Red Zone"};
+    const modeColor={consolidation:"#22C55E",catchup:"#F59E0B",redzone:"#EF4444"};
+    const totalHrs=hoursDriven+loggedHrs;
+    const logEntries=Object.entries(progress).map(([rid,p])=>{const r=ROUTES.find(x=>x.id===rid);return{rid,name:r?.name||rid,centre:r?.centre||"",runs:p.runs,mins:p.mins,last:p.last};}).sort((a,b)=>(b.last||"").localeCompare(a.last||""));
+    return(<div className="fade-up" style={{marginBottom:"12px",animationDelay:".05s"}}>
+    <div style={{display:"flex",gap:"8px"}}>
     <Card style={{flex:1,padding:"14px",display:"flex",alignItems:"center",gap:"12px"}}>
       <Ring value={daysLeft<=0?1:Math.max(0,1-daysLeft/30)} max={1} size={44} stroke={3.5} color={daysLeft<=7?"#EF4444":daysLeft<=21?"#F59E0B":"#0EA5E9"}>
         <span style={{fontSize:"14px",fontWeight:800,color:"#1A1A1A"}}>{daysLeft}</span>
       </Ring>
-      <div><div style={{fontSize:"11px",color:"#94A3B8",fontWeight:500}}>Days left</div><div style={{fontSize:"12px",fontWeight:700,color:PC(curPhase)}}>{curPhase||"—"}</div></div>
+      <div><div style={{fontSize:"11px",color:"#94A3B8",fontWeight:500}}>Days left</div>{planMode&&<span style={{fontSize:"10px",fontWeight:700,color:modeColor[planMode],background:modeColor[planMode]+"18",padding:"2px 8px",borderRadius:"10px"}}>{modeLabel[planMode]}</span>}
+      {planMeta.weeklyCapacity&&<div style={{fontSize:"10px",color:"#CBD5E1",marginTop:"2px"}}>{planMeta.weeklyCapacity}h/wk{Object.keys(dayOverrides).length>0?` · ${Object.keys(dayOverrides).length} adj`:""}</div>}</div>
     </Card>
-    <Card style={{flex:1,padding:"14px",display:"flex",alignItems:"center",gap:"12px"}}>
-      <Ring value={loggedHrs} max={TARGET_HOURS} size={44} stroke={3.5} color="#22C55E">
-        <span style={{fontSize:"11px",fontWeight:800,color:"#1A1A1A"}}>{loggedHrs}</span>
+    <Card onClick={()=>setShowRunLog(!showRunLog)} style={{flex:1,padding:"14px",display:"flex",alignItems:"center",gap:"12px",cursor:"pointer",border:showRunLog?"2px solid #E2E8F0":"2px solid transparent",transition:"border .15s"}}>
+      <Ring value={totalHrs} max={TARGET_HOURS} size={44} stroke={3.5} color={totalHrs>=TARGET_HOURS?"#22C55E":planMode==="redzone"?"#EF4444":"#22C55E"}>
+        <span style={{fontSize:"11px",fontWeight:800,color:"#1A1A1A"}}>{totalHrs}</span>
       </Ring>
-      <div><div style={{fontSize:"11px",color:"#94A3B8",fontWeight:500}}>Hours / {TARGET_HOURS}</div><div style={{fontSize:"12px",fontWeight:700,color:"#1A1A1A"}}>{totalRuns} runs</div></div>
+      <div><div style={{fontSize:"11px",color:"#94A3B8",fontWeight:500}}>{hoursDriven>0?`${hoursDriven}+${loggedHrs}`:loggedHrs} / {TARGET_HOURS}h</div><div style={{fontSize:"12px",fontWeight:700,color:"#1A1A1A"}}>{totalRuns} runs <span style={{fontSize:"10px",color:"#CBD5E1",fontWeight:500}}>{showRunLog?"▲":"▼"}</span></div></div>
     </Card>
-  </div>);
+    </div>
+    {showRunLog&&<Card style={{marginTop:"8px",padding:"12px 0"}}>
+      <div style={{padding:"0 16px 8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:"13px",fontWeight:700,color:"#475569"}}>Practice Log</span>
+        <span style={{fontSize:"11px",color:"#94A3B8"}}>{loggedHrs}h across {totalRuns} sessions</span>
+      </div>
+      {logEntries.length===0?<p style={{padding:"12px 16px",fontSize:"13px",color:"#CBD5E1",textAlign:"center"}}>No sessions logged yet.</p>
+      :logEntries.map(e=>(<div key={e.rid} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px 16px",borderTop:"1px solid #F8FAFC"}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:"13px",fontWeight:600,color:"#1A1A1A"}}>{e.name}</div>
+          <div style={{fontSize:"11px",color:"#94A3B8"}}>{e.centre} · {e.runs}× · {Math.round(e.mins)}min{e.last?` · last ${e.last}`:""}</div>
+        </div>
+        <button onClick={(ev)=>{ev.stopPropagation();removeRun(e.rid);}} style={{width:"28px",height:"28px",borderRadius:"8px",border:"1.5px solid #FEE2E2",background:"#FFF5F5",color:"#EF4444",fontSize:"13px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}
+          onMouseEnter={ev=>ev.currentTarget.style.background="#FEE2E2"} onMouseLeave={ev=>ev.currentTarget.style.background="#FFF5F5"}>−</button>
+      </div>))}
+    </Card>}
+  </div>);};
 
   // ─── PLAN VIEW ────────────────────────────────────────────────────
   const PlanView=()=>{
@@ -260,6 +1319,8 @@ function Drive(){
     plan.forEach(d=>{const k=d.phase;if(!grouped[k])grouped[k]=[];grouped[k].push(d);});
     return(<div>
       <TodayHero/>
+      <JourneyBar/>
+      {planMode&&<PlanBanner/>}
       <Stats/>
       {Object.entries(grouped).map(([phase,days],gi)=>(<div key={phase} className="fade-up" style={{marginBottom:"16px",animationDelay:`${.1+gi*.05}s`}}>
         <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px",padding:"0 4px"}}>
@@ -272,26 +1333,28 @@ function Drive(){
             const td=isToday(day.date),past=isPast(day.date)&&!td,exp=expDay===`${phase}-${i}`;
             const isTest=day.type==="test",isRest=day.type==="rest";
             return(<div key={i}>
-              <div onClick={()=>!isRest&&setExpDay(exp?null:`${phase}-${i}`)}
-                style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 16px",cursor:isRest?"default":"pointer",borderRadius:"12px",margin:"2px 4px",transition:"background .15s",background:td?"#F0F9FF":exp?"#F8FAFC":"transparent",opacity:past?.4:1}}
-                onMouseEnter={e=>{if(!past&&!isRest)e.currentTarget.style.background=td?"#F0F9FF":"#F8FAFC"}} onMouseLeave={e=>{if(!exp&&!td)e.currentTarget.style.background="transparent"}}>
+              <div onClick={()=>{if(isTest)return;if(isRest&&!past){toggleDay(fmtDateKey(day.date),true);return;}if(!isRest&&!past&&!isTest){setExpDay(exp?null:`${phase}-${i}`);}}}
+                style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 16px",cursor:(isTest||past)?"default":"pointer",borderRadius:"12px",margin:"2px 4px",transition:"background .15s",background:td?"#F0F9FF":exp?"#F8FAFC":"transparent",opacity:past?.4:1}}
+                onMouseEnter={e=>{if(!past&&!isTest)e.currentTarget.style.background=td?"#F0F9FF":"#F8FAFC"}} onMouseLeave={e=>{if(!exp&&!td)e.currentTarget.style.background="transparent"}}>
                 <div style={{width:"40px",textAlign:"center",flexShrink:0}}>
                   <div style={{fontSize:"11px",fontWeight:td?700:500,color:td?"#0EA5E9":"#94A3B8"}}>{td?"Now":fmtShort(day.date)}</div>
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   {isTest?<span style={{fontSize:"14px",fontWeight:700,color:"#0EA5E9"}}>Test Day 🎯</span>
-                  :isRest?<span style={{fontSize:"13px",color:"#CBD5E1"}}>Rest day</span>
+                  :isRest?<span style={{fontSize:"13px",color:"#CBD5E1"}}>{past?"Off day":"Off day — tap to add session"}</span>
                   :<div>
                     <div style={{fontSize:"14px",fontWeight:600,color:"#1A1A1A"}}>{day.route.name}</div>
                     <div style={{display:"flex",gap:"6px",alignItems:"center",marginTop:"2px"}}>
                       <span style={{fontSize:"11px",color:"#94A3B8"}}>{day.sessDur}min</span>
+                      {day.sessionsTotal>1&&<span style={{fontSize:"10px",color:"#0EA5E9",fontWeight:600}}>{day.slot}</span>}
                       <Pill level={day.route.difficulty} compact/>
+                      {focusPoints.length>0&&routeFocusScore(day.route,focusPoints)>0&&<span style={{fontSize:"9px",fontWeight:700,color:"#8B5CF6",background:"#8B5CF614",padding:"1px 6px",borderRadius:"8px"}}>Focus</span>}
                     </div>
                   </div>}
                 </div>
                 {!isRest&&!isTest&&<svg width="16" height="16" viewBox="0 0 16 16" style={{flexShrink:0,transform:exp?"rotate(90deg)":"none",transition:"transform .2s"}}><path d="M6 4l4 4-4 4" fill="none" stroke="#CBD5E1" strokeWidth="2" strokeLinecap="round"/></svg>}
               </div>
-              {exp&&day.route&&(<div className="fade-in" style={{padding:"0 16px 12px",marginTop:"-2px"}}>
+              {exp&&day.route&&(<div style={{padding:"0 16px 12px",marginTop:"-2px"}}>
                 <div style={{padding:"12px 16px",background:"#F8FAFC",borderRadius:"12px"}}>
                   <p style={{fontSize:"12px",color:"#64748B",margin:"0 0 10px",lineHeight:1.5}}>{day.route.description}</p>
                   <div style={{display:"flex",flexDirection:"column",gap:"4px",marginBottom:"10px"}}>
@@ -303,6 +1366,7 @@ function Drive(){
                     <a href={buildMapsUrl(day.route)} target="_blank" rel="noopener noreferrer" style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"10px",borderRadius:"10px",background:"#0EA5E9",color:"#fff",fontSize:"13px",fontWeight:700,textDecoration:"none"}}>Maps ↗</a>
                     <button onClick={()=>logRun(day.route.id,day.sessDur)} style={{flex:1,padding:"10px",borderRadius:"10px",background:"#F0FDF4",border:"none",color:"#22C55E",fontSize:"13px",fontWeight:700,cursor:"pointer"}}>Log {day.sessDur}min ✓</button>
                   </div>
+                  {!isPast(day.date)&&<button onClick={(ev)=>{ev.stopPropagation();toggleDay(fmtDateKey(day.date),false);setExpDay(null);}} style={{width:"100%",marginTop:"6px",padding:"8px",borderRadius:"8px",border:"1.5px solid #FEE2E2",background:"#FFF5F5",color:"#EF4444",fontSize:"11px",fontWeight:600,cursor:"pointer"}}>Skip this session</button>}
                 </div>
               </div>)}
             </div>);
@@ -314,7 +1378,13 @@ function Drive(){
 
   // ─── ROUTES VIEW ──────────────────────────────────────────────────
   const RoutesView=()=>(<div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-    {ROUTES.map((r,ri)=>{
+    <div className="pill-scroll fade-up" style={{marginBottom:"4px"}}>
+      <button onClick={()=>setRouteFilter(null)} style={{padding:"6px 14px",borderRadius:"20px",border:"none",fontSize:"12px",fontWeight:routeFilter===null?700:500,background:routeFilter===null?"#0EA5E9":"#F1F5F9",color:routeFilter===null?"#fff":"#64748B",cursor:"pointer",whiteSpace:"nowrap",transition:"all .2s",flexShrink:0}}>All ({ROUTES.length})</button>
+      {uniqueCentres.map(c=>{const count=c==="Raheny"||c==="Killester"?ROUTES.filter(r=>r.centre==="Raheny"||r.centre==="Killester").length:ROUTES.filter(r=>r.centre===c).length;
+        return(<button key={c} onClick={()=>setRouteFilter(routeFilter===c?null:c)} style={{padding:"6px 14px",borderRadius:"20px",border:"none",fontSize:"12px",fontWeight:routeFilter===c?700:500,background:routeFilter===c?"#0EA5E9":"#F1F5F9",color:routeFilter===c?"#fff":"#64748B",cursor:"pointer",whiteSpace:"nowrap",transition:"all .2s",flexShrink:0}}>{c} ({count})</button>);
+      })}
+    </div>
+    {filteredRoutes.map((r,ri)=>{
       const p=progress[r.id],runs=p?.runs||0,exp=expRoute===r.id;
       return(<Card key={r.id} className="fade-up" style={{padding:0,overflow:"hidden",animationDelay:`${ri*.04}s`,cursor:"pointer"}}
         onClick={()=>setExpRoute(exp?null:r.id)}>
@@ -322,11 +1392,11 @@ function Drive(){
           <div style={{flex:1,minWidth:0}}>
             <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}}><Pill level={r.difficulty}/>{runs>0&&<span style={{fontSize:"12px",fontWeight:700,color:"#0EA5E9"}}>{runs}×</span>}</div>
             <div style={{fontSize:"16px",fontWeight:700,color:"#1A1A1A"}}>{r.name}</div>
-            <div style={{fontSize:"12px",color:"#94A3B8",marginTop:"2px"}}>{r.centre} · {r.duration}min · {r.distance}</div>
+            <div style={{fontSize:"12px",color:"#94A3B8",marginTop:"2px"}}>{r.centre} · {r.duration}min · {r.distance}{focusPoints.length>0&&routeFocusScore(r,focusPoints)>0&&<span style={{marginLeft:"6px",fontSize:"10px",fontWeight:700,color:"#8B5CF6"}}> ◆ Focus match</span>}</div>
           </div>
           <MiniMap wps={r.waypoints} sz={75}/>
         </div>
-        {exp&&(<div className="fade-in" style={{padding:"0 16px 16px",borderTop:"1px solid #F1F5F9"}}>
+        {exp&&(<div style={{padding:"0 16px 16px",borderTop:"1px solid #F1F5F9"}}>
           <p style={{fontSize:"12px",color:"#64748B",margin:"12px 0 10px",lineHeight:1.5}}>{r.description}</p>
           <div style={{display:"flex",flexDirection:"column",gap:"3px",marginBottom:"12px"}}>
             {r.waypoints.map((wp,j)=>(<div key={j} style={{display:"flex",gap:"6px",alignItems:"flex-start"}}><WIcon type={wp.type}/><div><span style={{fontSize:"12px",fontWeight:500,color:"#334155"}}>{wp.name}</span>{wp.note&&<span style={{fontSize:"11px",color:"#94A3B8"}}> — {wp.note}</span>}</div></div>))}
@@ -357,8 +1427,8 @@ function Drive(){
       </div>
     </Card>
     <Card className="fade-up" style={{animationDelay:".05s"}}>
-      <h3 style={{fontSize:"14px",fontWeight:700,color:"#F59E0B",margin:"0 0 10px"}}>Common Fails</h3>
-      {[{t:"Progress at Lights",d:"Not entering junction on green. Go to middle, wait, turn."},{t:"Roundabout Position",d:"Wrong lane at Artane. Read markings 50m ahead."},{t:"Observation",d:"No mirror before moving out or turning."},{t:"Clearance",d:"Too close to parked cars. 1m minimum."},{t:"Mini Roundabouts",d:"1st gear right turns. Yield right. Signal."}].map((f,i)=>(<div key={i} style={{marginBottom:i<4?"10px":0}}>
+      <h3 style={{fontSize:"14px",fontWeight:700,color:"#F59E0B",margin:"0 0 10px"}}>#1 Fail Locations by Centre</h3>
+      {[{t:"Raheny/Killester",d:"Artane Castle roundabout \u2014 lane position on right turn at lights"},{t:"Finglas",d:"Right turn through village one-way \u2014 cars overtake on outside"},{t:"Tallaght",d:"Village right turn onto Greenhills Rd \u2014 hatch markings"},{t:"Churchtown",d:"Centre exit \u2014 steep gradient, blind visibility"},{t:"D\u00fan Laoghaire",d:"Bakers Corner \u2014 right turn needs filter light"},{t:"Mulhuddart",d:"N3 return \u2014 one-way road, must use right lane"}].map((f,i)=>(<div key={i} style={{marginBottom:i<5?"10px":0}}>
         <div style={{fontSize:"13px",fontWeight:700,color:"#334155"}}>{f.t}</div>
         <div style={{fontSize:"12px",color:"#94A3B8",lineHeight:1.5}}>{f.d}</div>
       </div>))}
@@ -370,8 +1440,15 @@ function Drive(){
       </div>
     </Card>
     <Card className="fade-up" style={{animationDelay:".15s"}}>
+      {focusPoints.length>0&&<>
+        <h3 style={{fontSize:"14px",fontWeight:700,color:"#8B5CF6",margin:"0 0 8px"}}>Your Focus Areas</h3>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"16px"}}>
+          {focusPoints.map(fid=>{const sk=FOCUS_SKILLS.find(s=>s.id===fid);return sk?<span key={fid} style={{padding:"5px 12px",borderRadius:"20px",fontSize:"12px",fontWeight:600,background:"#F5F3FF",color:"#8B5CF6"}}>{sk.label}</span>:null;})}
+        </div>
+        <p style={{fontSize:"12px",color:"#94A3B8",margin:"0 0 16px",lineHeight:1.5}}>Routes matching these skills are prioritised in your plan and marked with a ◆ badge.</p>
+      </>}
       <h3 style={{fontSize:"14px",fontWeight:700,color:"#475569",margin:"0 0 6px"}}>Hours Guide</h3>
-      <p style={{fontSize:"13px",color:"#64748B",lineHeight:1.6,margin:0}}>Most Irish learners need <strong style={{color:"#1A1A1A"}}>30–45 hours total</strong>. RSA mandates 12 EDT sessions minimum. This plan targets <strong style={{color:"#1A1A1A"}}>{TARGET_HOURS}h</strong> across {plan.filter(p=>p.type==="practice").length} sessions, building from 60 to 120 minutes.</p>
+      <p style={{fontSize:"13px",color:"#64748B",lineHeight:1.6,margin:0}}>Most Irish learners need <strong style={{color:"#1A1A1A"}}>30–45 hours total</strong>. RSA mandates 12 EDT sessions minimum. Target: <strong style={{color:"#1A1A1A"}}>{TARGET_HOURS}h</strong>.{hoursDriven>0&&` You've banked ${hoursDriven}h so far.`} The plan adapts to your hours and time remaining — it'll tell you if you're on track, need to catch up, or should consider rescheduling.</p>
     </Card>
   </div>);
 
@@ -380,31 +1457,99 @@ function Drive(){
     {/* HEADER */}
     <div style={{position:"sticky",top:0,zIndex:50,background:"rgba(250,250,248,.85)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",padding:"14px 20px",borderBottom:"1px solid rgba(0,0,0,.04)"}}>
       <div style={{maxWidth:"600px",margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+        <div onClick={()=>testDate&&setShowSetup(true)} style={{display:"flex",alignItems:"center",gap:"10px",cursor:testDate?"pointer":"default",borderRadius:"12px",padding:"4px 8px",margin:"-4px -8px",transition:"background .15s"}} onMouseEnter={e=>{if(testDate)e.currentTarget.style.background="rgba(0,0,0,.03)"}} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
           <h1 style={{fontSize:"20px",fontWeight:800,color:"#1A1A1A",margin:0}}>Drive</h1>
           {centre&&<span style={{fontSize:"11px",fontWeight:600,color:"#94A3B8",background:"#F1F5F9",padding:"3px 10px",borderRadius:"20px"}}>{centre}</span>}
+          {testDate&&daysLeft!==null&&<span style={{fontSize:"11px",fontWeight:500,color:"#CBD5E1"}}>· {daysLeft}d</span>}
         </div>
         <button onClick={()=>setShowSetup(true)} style={{width:"34px",height:"34px",borderRadius:"12px",border:"none",background:"#F1F5F9",color:"#64748B",fontSize:"16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"background .2s"}} onMouseEnter={e=>e.currentTarget.style.background="#E2E8F0"} onMouseLeave={e=>e.currentTarget.style.background="#F1F5F9"}>⚙</button>
       </div>
     </div>
 
     {(showSetup||needsSetup)&&<div className="fade-in" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px"}}>
-      <div className="fade-up" style={{background:"#fff",borderRadius:"24px",padding:"28px",maxWidth:"380px",width:"100%",boxShadow:"0 24px 48px rgba(0,0,0,.12)"}}>
+      <div className="fade-up" style={{background:"#fff",borderRadius:"24px",padding:"28px",maxWidth:"420px",width:"100%",boxShadow:"0 24px 48px rgba(0,0,0,.12)",maxHeight:"90vh",overflowY:"auto"}}>
         <h2 style={{fontSize:"22px",fontWeight:800,margin:"0 0 4px",color:"#1A1A1A"}}>{needsSetup?"Let's get started":"Settings"}</h2>
         <p style={{fontSize:"14px",color:"#94A3B8",margin:"0 0 24px"}}>{needsSetup?"Set your test date and centre.":"Adjust your plan."}</p>
         <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"6px"}}>TEST DATE</label>
         <input type="date" value={dateInput} onChange={e=>setDateInput(e.target.value)}
           style={{width:"100%",padding:"14px 16px",borderRadius:"12px",background:"#F8FAFC",border:"2px solid #E2E8F0",color:"#1A1A1A",fontSize:"16px",outline:"none",transition:"border .2s",marginBottom:"18px"}}
           onFocus={e=>e.target.style.borderColor="#0EA5E9"} onBlur={e=>e.target.style.borderColor="#E2E8F0"}/>
+        <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"6px"}}>HOURS DRIVEN SO FAR</label>
+        <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"18px"}}>
+          <input type="number" min="0" max="200" value={hoursInput} onChange={e=>setHoursInput(e.target.value)}
+            style={{flex:1,padding:"14px 16px",borderRadius:"12px",background:"#F8FAFC",border:"2px solid #E2E8F0",color:"#1A1A1A",fontSize:"16px",outline:"none",transition:"border .2s"}}
+            onFocus={e=>e.target.style.borderColor="#0EA5E9"} onBlur={e=>e.target.style.borderColor="#E2E8F0"} placeholder="0"/>
+          <span style={{fontSize:"13px",color:"#94A3B8",fontWeight:500,flexShrink:0}}>hours</span>
+        </div>
+        <p style={{fontSize:"11px",color:"#CBD5E1",margin:"-12px 0 18px",lineHeight:1.5}}>Include EDT lessons + practice. 1 EDT = ~1hr. Most learners need 30–45 total.</p>
+
+        <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"8px"}}>PRACTICE SCHEDULE</label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"8px",marginBottom:"12px"}}>
+          {Object.entries(PRESETS).map(([pid,p])=>{
+            const on=presetInput===pid;
+            return(<button key={pid} onClick={()=>applyPreset(pid)}
+              style={{padding:"12px 10px",borderRadius:"14px",border:`2px solid ${on?"#0EA5E9":"#E2E8F0"}`,background:on?"#F0F9FF":"#FAFAFA",cursor:"pointer",transition:"all .15s",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+                <span style={{fontSize:"16px"}}>{p.icon}</span>
+                <span style={{fontSize:"14px",fontWeight:700,color:on?"#0EA5E9":"#475569"}}>{p.label}</span>
+              </div>
+              <div style={{fontSize:"11px",color:"#94A3B8",marginTop:"4px"}}>{p.desc}</div>
+              {pid!=="custom"&&<div style={{fontSize:"10px",color:on?"#0EA5E9":"#CBD5E1",marginTop:"2px",fontWeight:600}}>~{p.wkHrs}h/week</div>}
+            </button>);})}
+        </div>
+
+        {presetInput==="custom"&&<>
+          <div style={{display:"flex",gap:"6px",marginBottom:"14px",justifyContent:"center"}}>
+            {[{d:1,l:"M"},{d:2,l:"T"},{d:3,l:"W"},{d:4,l:"T"},{d:5,l:"F"},{d:6,l:"S"},{d:0,l:"S"}].map(({d,l})=>{
+              const on=daysInput.includes(d);
+              return(<button key={d} onClick={()=>setDaysInput(prev=>on?prev.filter(x=>x!==d):[...prev,d].sort())}
+                style={{width:"36px",height:"36px",borderRadius:"50%",border:`2px solid ${on?"#0EA5E9":"#E2E8F0"}`,background:on?"#0EA5E9":"transparent",color:on?"#fff":"#94A3B8",fontSize:"13px",fontWeight:700,cursor:"pointer",transition:"all .15s",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {l}
+              </button>);})}
+          </div>
+          <div style={{display:"flex",gap:"8px",marginBottom:"12px"}}>
+            {[["wd","Weekdays"],["we","Weekends"]].map(([cat,label])=>{
+              const c=schedInput[cat];
+              return(<div key={cat} style={{flex:1,padding:"10px",borderRadius:"12px",border:"1.5px solid #E2E8F0",background:"#FAFAFA"}}>
+                <div style={{fontSize:"11px",fontWeight:700,color:"#475569",marginBottom:"8px"}}>{label}</div>
+                <div style={{display:"flex",gap:"4px",marginBottom:"6px"}}>
+                  {[1,2,3].map(n=>(
+                    <button key={n} onClick={()=>updSched(cat,"spd",n)} style={{flex:1,padding:"5px 2px",borderRadius:"6px",border:`1.5px solid ${c.spd===n?"#0EA5E9":"#E2E8F0"}`,background:c.spd===n?"#F0F9FF":"#fff",color:c.spd===n?"#0EA5E9":"#94A3B8",fontSize:"12px",fontWeight:700,cursor:"pointer"}}>{n}×</button>))}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
+                  <input type="range" min="30" max="120" step="15" value={c.len} onChange={e=>updSched(cat,"len",Number(e.target.value))} style={{flex:1}}/>
+                  <span style={{fontSize:"11px",fontWeight:600,color:"#0EA5E9",minWidth:"36px"}}>{c.len}m</span>
+                </div>
+              </div>);})}
+          </div>
+        </>}
+
+        <p style={{fontSize:"11px",color:"#CBD5E1",margin:"0 0 18px",lineHeight:1.5}}>
+          {presetInput!=="custom"?"You can adjust individual days on your plan after generating — tap any off day to add a session, or skip days you can't make."
+          :(()=>{const wdDays=daysInput.filter(d=>d>=1&&d<=5).length;const weDays=daysInput.filter(d=>d===0||d===6).length;
+            const wdH=wdDays*schedInput.wd.spd*schedInput.wd.len/60;const weH=weDays*schedInput.we.spd*schedInput.we.len/60;
+            return `${Math.round((wdH+weH)*10)/10}h/week — tap days on your plan to adjust week by week.`;
+          })()}
+        </p>
+
+        <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"8px"}}>FOCUS AREAS <span style={{fontWeight:500,textTransform:"none",letterSpacing:0}}>(optional — what do you want to improve?)</span></label>
+        <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"18px"}}>
+          {FOCUS_SKILLS.map(sk=>{const on=focusInput.includes(sk.id);return(
+            <button key={sk.id} onClick={()=>setFocusInput(prev=>on?prev.filter(x=>x!==sk.id):[...prev,sk.id])}
+              style={{padding:"7px 14px",borderRadius:"20px",border:`1.5px solid ${on?"#8B5CF6":"#E2E8F0"}`,background:on?"#F5F3FF":"#FAFAFA",color:on?"#8B5CF6":"#64748B",fontSize:"12px",fontWeight:on?700:500,cursor:"pointer",transition:"all .15s"}}>
+              {sk.label}
+            </button>);})}
+        </div>
+
         <label style={{fontSize:"12px",fontWeight:700,color:"#94A3B8",letterSpacing:".5px",display:"block",marginBottom:"8px"}}>TEST CENTRE</label>
-        <div style={{display:"flex",gap:"8px",marginBottom:"8px"}}>
-          {[{v:"Killester",s:"~69% pass rate"},{v:"Raheny",s:"~48% pass rate"}].map(o=>(
-            <button key={o.v} onClick={()=>setCentre(o.v)} style={{flex:1,padding:"14px 8px",borderRadius:"14px",border:`2px solid ${centre===o.v?"#0EA5E9":"#E2E8F0"}`,background:centre===o.v?"#F0F9FF":"#FAFAFA",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
-              <div style={{fontSize:"15px",fontWeight:700,color:centre===o.v?"#0EA5E9":"#475569"}}>{o.v}</div>
-              <div style={{fontSize:"11px",color:"#94A3B8",marginTop:"2px"}}>{o.s}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"8px",marginBottom:"8px"}}>
+          {CENTRES.map(o=>(
+            <button key={o.id} onClick={()=>setCentre(o.name)} style={{padding:"12px 8px",borderRadius:"14px",border:`2px solid ${centre===o.name?"#0EA5E9":"#E2E8F0"}`,background:centre===o.name?"#F0F9FF":"#FAFAFA",cursor:"pointer",transition:"all .2s",textAlign:"center"}}>
+              <div style={{fontSize:"14px",fontWeight:700,color:centre===o.name?"#0EA5E9":"#475569"}}>{o.name}</div>
+              <div style={{fontSize:"11px",color:"#94A3B8",marginTop:"2px"}}>{o.passRate}</div>
             </button>))}
         </div>
-        <p style={{fontSize:"11px",color:"#CBD5E1",margin:"0 0 20px",lineHeight:1.5}}>Both centres share the same test roads. All 8 routes available regardless.</p>
+        <p style={{fontSize:"11px",color:"#CBD5E1",margin:"0 0 20px",lineHeight:1.5}}>Raheny & Killester share test roads. Routes are filtered to your centre.</p>
         <button onClick={apply} disabled={!dateInput} style={{width:"100%",padding:"16px",borderRadius:"14px",border:"none",fontSize:"16px",fontWeight:700,cursor:dateInput?"pointer":"not-allowed",background:dateInput?"#0EA5E9":"#E2E8F0",color:dateInput?"#fff":"#94A3B8",transition:"all .2s",marginBottom:"8px"}}>
           {needsSetup?"Generate Plan":"Save Changes"}
         </button>
@@ -422,6 +1567,12 @@ function Drive(){
       {view==="routes"&&<RoutesView/>}
       {view==="ref"&&<RefView/>}
     </div>
+
+    {/* UNDO TOAST */}
+    {toast&&<div className={toast.leaving?"toast-out":"toast-in"} style={{position:"fixed",bottom:"90px",left:"50%",transform:"translateX(-50%)",zIndex:200,background:"#1A1A1A",color:"#fff",borderRadius:"14px",padding:"12px 20px",display:"flex",alignItems:"center",gap:"14px",boxShadow:"0 8px 24px rgba(0,0,0,.2)",maxWidth:"calc(100% - 40px)",fontSize:"13px",fontWeight:500}}>
+      <span style={{flex:1}}>{toast.msg}</span>
+      {toast.undoFn&&<button onClick={()=>{toast.undoFn();setToast(null);}} style={{background:"none",border:"none",color:"#0EA5E9",fontSize:"13px",fontWeight:700,cursor:"pointer",padding:"4px 8px",borderRadius:"8px",whiteSpace:"nowrap"}}>Undo</button>}
+    </div>}
 
     {/* BOTTOM NAV */}
     <div style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,.9)",backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",borderTop:"1px solid rgba(0,0,0,.06)",padding:"8px 0 max(8px,env(safe-area-inset-bottom))",zIndex:50}}>
